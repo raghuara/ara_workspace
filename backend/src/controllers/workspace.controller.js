@@ -69,7 +69,8 @@ const mapMember = (row) => ({
   userTypeId: row.user_type_id,
   userTypeName: row.user_type_name,
   groupId: row.group_id,
-  teamId: row.team_id
+  teamId: row.team_id,
+  taskScope: row.task_scope ?? "team"
 });
 
 const loadAccessibleWorkspace = async (req, res, workspaceId) => {
@@ -488,6 +489,22 @@ const addMember = async (req, res) => {
   res.status(201).json(mapMember(members.find((member) => member.employee_id === employeeId)));
 };
 
+const updateMember = async (req, res) => {
+  const workspace = await loadAccessibleWorkspace(req, res, req.params.workspaceId);
+  if (!workspace) return;
+
+  const taskScope = text(req.body.taskScope);
+  if (!["own", "team"].includes(taskScope)) {
+    return badRequest(res, "Task visibility must be own or team.", { taskScope: "Choose own or team." });
+  }
+
+  const updated = await workspaceModel.updateMemberScope(workspace.id, req.params.employeeId, taskScope);
+  if (!updated) return notFound(res, "That person is not a member of this workspace.");
+
+  const members = await workspaceModel.findMembers(workspace.id);
+  res.json(mapMember(members.find((member) => member.employee_id === req.params.employeeId)));
+};
+
 const removeMember = async (req, res) => {
   const workspace = await loadAccessibleWorkspace(req, res, req.params.workspaceId);
   if (!workspace) return;
@@ -518,5 +535,6 @@ module.exports = {
   updateColumn,
   deleteColumn,
   addMember,
+  updateMember,
   removeMember
 };

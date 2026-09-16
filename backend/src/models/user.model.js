@@ -7,6 +7,7 @@ const USER_SELECT = `
     u.email,
     u.password_hash,
     u.is_active,
+    u.must_change_password,
     ut.id        AS user_type_id,
     ut.name      AS user_type_name,
     ut.slug      AS user_type_slug,

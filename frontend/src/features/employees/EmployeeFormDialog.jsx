@@ -11,7 +11,7 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
-import { departmentService } from '@/api/departmentService'
+import { departmentService, designationService } from '@/api/catalogService'
 import { employeeService } from '@/api/employeeService'
 import { isForbidden } from '@/api/httpClient'
 import { EMPLOYMENT_STATUS, EMPLOYMENT_TYPES, WORK_LOCATIONS } from '@/constants/domain'
@@ -75,7 +75,8 @@ const EmployeeForm = ({ employee, onClose, onSaved }) => {
   const [errors, setErrors] = useState({})
 
   const { data: managerOptions } = useAsync(employeeService.getEmployeeOptions, [])
-  const { data: departments } = useAsync(departmentService.listDepartments, [{ activeOnly: true }])
+  const { data: departments } = useAsync(departmentService.list, [{ activeOnly: true }])
+  const { data: designations } = useAsync(designationService.list, [{ activeOnly: true }])
 
   const { submit, submitting, error, reset } = useSubmit((payload) =>
     isEditing ? employeeService.updateEmployee(employee.id, payload) : employeeService.createEmployee(payload),
@@ -191,11 +192,24 @@ const EmployeeForm = ({ employee, onClose, onSaved }) => {
                 {option.name}
               </MenuItem>
             ))}
-            {isEditing && values.department && !(departments ?? []).some((option) => option.name === values.department) ? (
+            {isEditing &&
+            values.department &&
+            !(departments ?? []).some((option) => option.name === values.department) ? (
               <MenuItem value={values.department}>{values.department} (inactive)</MenuItem>
             ) : null}
           </TextField>
-          <TextField {...fieldProps('designation', 'Designation')} />
+          <TextField {...fieldProps('designation', 'Designation', { rest: { select: true } })}>
+            {(designations ?? []).map((option) => (
+              <MenuItem key={option.id} value={option.name}>
+                {option.name}
+              </MenuItem>
+            ))}
+            {isEditing &&
+            values.designation &&
+            !(designations ?? []).some((option) => option.name === values.designation) ? (
+              <MenuItem value={values.designation}>{values.designation} (inactive)</MenuItem>
+            ) : null}
+          </TextField>
           <TextField
             {...fieldProps('reportingManagerId', 'Reporting manager', {
               required: false,

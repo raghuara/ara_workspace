@@ -3,6 +3,8 @@ const jwt = require("jsonwebtoken");
 const userModel = require("../models/user.model");
 const workspaceModel = require("../models/workspace.model");
 const adminModel = require("../models/admin.model");
+const accountModel = require("../models/account.model");
+const { PASSWORD_PATTERN, PASSWORD_RULE } = require("./account.controller");
 
 const TOKEN_EXPIRES_IN = "8h";
 
@@ -31,6 +33,7 @@ const buildSession = async (user) => ({
     ? user.permissions
     : JSON.parse(user.permissions),
   workspaceIds: await workspaceModel.findWorkspaceIdsForEmployee(user.employee_id),
+  mustChangePassword: Boolean(user.must_change_password),
   features: await adminModel.findFeatures()
 });
 
@@ -73,10 +76,40 @@ const login = async (req, res) => {
     { expiresIn: TOKEN_EXPIRES_IN }
   );
 
+  await accountModel.touchLastLogin(user.id);
+
   res.json({
     token,
     session: await buildSession(user)
   });
+};
+
+const changePassword = async (req, res) => {
+  const currentPassword = typeof req.body.currentPassword === "string" ? req.body.currentPassword : "";
+  const newPassword = typeof req.body.newPassword === "string" ? req.body.newPassword : "";
+  const errors = {};
+
+  const user = await userModel.findUserById(req.user.userId);
+  if (!user || !user.is_active) {
+    return res.status(401).json({ message: "Your session is no longer valid. Please log in again.", code: "UNAUTHORIZED" });
+  }
+
+  const skipCurrent = Boolean(user.must_change_password) && !currentPassword;
+
+  if (!skipCurrent) {
+    if (!currentPassword) errors.currentPassword = "Enter your current password.";
+    else if (!(await bcrypt.compare(currentPassword, user.password_hash))) errors.currentPassword = "Current password is incorrect.";
+  }
+
+  if (!PASSWORD_PATTERN.test(newPassword)) errors.newPassword = PASSWORD_RULE;
+  else if (await bcrypt.compare(newPassword, user.password_hash)) errors.newPassword = "Choose a different password from the current one.";
+
+  if (Object.keys(errors).length > 0) {
+    return res.status(400).json({ message: "Please fix the highlighted fields.", code: "VALIDATION_ERROR", errors });
+  }
+
+  await accountModel.setPassword(user.id, await bcrypt.hash(newPassword, 10), false);
+  res.json(await buildSession(await userModel.findUserById(user.id)));
 };
 
 const me = async (req, res) => {
@@ -94,5 +127,6 @@ const me = async (req, res) => {
 
 module.exports = {
   login,
-  me
+  me,
+  changePassword
 };

@@ -116,28 +116,3 @@ export const apiRequest = async (path, options = {}) => {
   return payload
 }
 
-const MIN_LATENCY_MS = 180
-const MAX_LATENCY_MS = 460
-
-const randomLatency = () => MIN_LATENCY_MS + Math.random() * (MAX_LATENCY_MS - MIN_LATENCY_MS)
-
-const clone = (value) => (typeof structuredClone === 'function' ? structuredClone(value) : JSON.parse(JSON.stringify(value)))
-
-export const mockRequest = (handler, options = {}) => {
-  const { isPublic = false } = options
-
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      if (!isPublic && !getToken()) {
-        reject(new ApiError(401, 'Your session has ended. Please sign in again.', 'UNAUTHENTICATED'))
-        return
-      }
-
-      try {
-        resolve(clone(handler()))
-      } catch (error) {
-        reject(error instanceof ApiError ? error : new ApiError(500, 'Unexpected server error.', 'INTERNAL'))
-      }
-    }, randomLatency())
-  })
-}

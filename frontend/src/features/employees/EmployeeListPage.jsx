@@ -27,7 +27,7 @@ import { UserAvatar } from '@/components/UserAvatar'
 import { EmptyState } from '@/components/EmptyState'
 import { QueryStateView } from '@/components/QueryStateView'
 import { TableSkeleton } from '@/components/TableSkeleton'
-import { departmentService } from '@/api/departmentService'
+import { departmentService } from '@/api/catalogService'
 import { employeeService } from '@/api/employeeService'
 import { EMPLOYMENT_STATUS } from '@/constants/domain'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -73,7 +73,7 @@ export const EmployeeListPage = () => {
   )
 
   const { data, loading, error, reload } = useAsync(employeeService.listEmployees, [query])
-  const { data: departments } = useAsync(departmentService.listDepartments, [])
+  const { data: departments } = useAsync(departmentService.list, [])
 
   const hasFilters = Boolean(search || department || status)
 

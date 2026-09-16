@@ -33,16 +33,12 @@ const ClientsPage = lazyPage(() => import('@/features/clients/ClientsPage'), 'Cl
 const ActivityLogPage = lazyPage(() => import('@/features/activity/ActivityLogPage'), 'ActivityLogPage')
 const UserTypesPage = lazyPage(() => import('@/features/admin/UserTypesPage'), 'UserTypesPage')
 const DepartmentsPage = lazyPage(() => import('@/features/admin/DepartmentsPage'), 'DepartmentsPage')
+const DesignationsPage = lazyPage(() => import('@/features/admin/DesignationsPage'), 'DesignationsPage')
+const AccountsPage = lazyPage(() => import('@/features/admin/AccountsPage'), 'AccountsPage')
 const FeatureAccessPage = lazyPage(() => import('@/features/admin/FeatureAccessPage'), 'FeatureAccessPage')
 const WorkspaceAdminPage = lazyPage(() => import('@/features/admin/WorkspaceAdminPage'), 'WorkspaceAdminPage')
 const EmployeeListPage = lazyPage(() => import('@/features/employees/EmployeeListPage'), 'EmployeeListPage')
 const EmployeeDetailPage = lazyPage(() => import('@/features/employees/EmployeeDetailPage'), 'EmployeeDetailPage')
-const InterviewSchedulePage = lazyPage(() => import('@/features/recruitment/InterviewSchedulePage'), 'InterviewSchedulePage')
-const InterviewReviewsPage = lazyPage(() => import('@/features/recruitment/InterviewReviewsPage'), 'InterviewReviewsPage')
-const PerformanceReviewsPage = lazyPage(() => import('@/features/performance/PerformanceReviewsPage'), 'PerformanceReviewsPage')
-const SalaryOverviewPage = lazyPage(() => import('@/features/compensation/SalaryOverviewPage'), 'SalaryOverviewPage')
-const IncrementPage = lazyPage(() => import('@/features/compensation/IncrementPage'), 'IncrementPage')
-const SalaryHistoryPage = lazyPage(() => import('@/features/compensation/SalaryHistoryPage'), 'SalaryHistoryPage')
 const NotFoundPage = lazyPage(() => import('@/pages/NotFoundPage'), 'NotFoundPage')
 
 const PageFallback = () => (
@@ -93,7 +89,7 @@ export const AppRoutes = () => (
         <Route
           path={ROUTES.recurring}
           element={guarded(<RecurringTasksPage />, {
-            permission: PERMISSIONS.TASK_VIEW,
+            permission: PERMISSIONS.TASK_RECURRING,
             feature: FEATURES.RECURRING_TASKS,
             title: 'Recurring tasks',
           })}
@@ -130,7 +126,16 @@ export const AppRoutes = () => (
 
         <Route
           path={ROUTES.adminWorkspaces}
-          element={guarded(<WorkspaceAdminPage />, { permission: PERMISSIONS.WORKSPACE_VIEW, title: 'Workspaces' })}
+          element={guarded(<WorkspaceAdminPage />, {
+            permission: [
+              PERMISSIONS.WORKSPACE_CREATE,
+              PERMISSIONS.WORKSPACE_UPDATE,
+              PERMISSIONS.GROUP_MANAGE,
+              PERMISSIONS.TEAM_MANAGE,
+              PERMISSIONS.STATUS_MANAGE,
+            ],
+            title: 'Workspaces',
+          })}
         />
         <Route
           path={ROUTES.adminUserTypes}
@@ -141,8 +146,16 @@ export const AppRoutes = () => (
           element={guarded(<FeatureAccessPage />, { permission: PERMISSIONS.FEATURE_MANAGE, title: 'Feature Access' })}
         />
         <Route
+          path={ROUTES.adminAccounts}
+          element={guarded(<AccountsPage />, { permission: PERMISSIONS.USERTYPE_MANAGE, title: 'Accounts' })}
+        />
+        <Route
           path={ROUTES.adminDepartments}
           element={guarded(<DepartmentsPage />, { permission: PERMISSIONS.EMPLOYEE_UPDATE, title: 'Departments' })}
+        />
+        <Route
+          path={ROUTES.adminDesignations}
+          element={guarded(<DesignationsPage />, { permission: PERMISSIONS.EMPLOYEE_UPDATE, title: 'Designations' })}
         />
 
         <Route
@@ -162,57 +175,6 @@ export const AppRoutes = () => (
           })}
         />
 
-        <Route path={ROUTES.recruitment} element={<Navigate to={ROUTES.interviewSchedule} replace />} />
-        <Route
-          path={ROUTES.interviewSchedule}
-          element={guarded(contained(<InterviewSchedulePage />), {
-            permission: PERMISSIONS.INTERVIEW_VIEW,
-            feature: FEATURES.RECRUITMENT,
-            title: 'Interview Schedule',
-          })}
-        />
-        <Route
-          path={ROUTES.interviewReviews}
-          element={guarded(contained(<InterviewReviewsPage />), {
-            permission: PERMISSIONS.REVIEW_VIEW,
-            feature: FEATURES.RECRUITMENT,
-            title: 'Interview Reviews',
-          })}
-        />
-        <Route
-          path={ROUTES.performance}
-          element={guarded(contained(<PerformanceReviewsPage />), {
-            permission: PERMISSIONS.REVIEW_VIEW,
-            feature: FEATURES.PERFORMANCE,
-            title: 'Performance',
-          })}
-        />
-
-        <Route path={ROUTES.compensation} element={<Navigate to={ROUTES.compensationOverview} replace />} />
-        <Route
-          path={ROUTES.compensationOverview}
-          element={guarded(contained(<SalaryOverviewPage />), {
-            permission: PERMISSIONS.COMPENSATION_VIEW,
-            feature: FEATURES.COMPENSATION,
-            title: 'Salary Overview',
-          })}
-        />
-        <Route
-          path={ROUTES.compensationIncrement}
-          element={guarded(contained(<IncrementPage />), {
-            permission: PERMISSIONS.COMPENSATION_UPDATE,
-            feature: FEATURES.COMPENSATION,
-            title: 'Increment Management',
-          })}
-        />
-        <Route
-          path={ROUTES.compensationHistory}
-          element={guarded(contained(<SalaryHistoryPage />), {
-            permission: PERMISSIONS.COMPENSATION_HISTORY_VIEW,
-            feature: FEATURES.COMPENSATION,
-            title: 'Salary History',
-          })}
-        />
 
         <Route path="*" element={contained(<NotFoundPage />)} />
       </Route>

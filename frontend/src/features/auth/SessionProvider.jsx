@@ -3,7 +3,6 @@ import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
 import { authService } from '@/api/authService'
 import { sessionService } from '@/api/sessionService'
 import { isUnauthorized } from '@/api/httpClient'
-import { syncMockIdentity } from '@/api/mockDb'
 import { SessionContext } from './sessionContext'
 import logoUrl from '@/assets/logo.png'
 
@@ -40,8 +39,6 @@ export const SessionProvider = ({ children }) => {
         setStatus(STATUS.ANONYMOUS)
         return
       }
-
-      syncMockIdentity(loaded)
       const loadedRoles = await sessionService.listRoles().catch(() => [])
       if (cancelled) return
 
@@ -63,7 +60,6 @@ export const SessionProvider = ({ children }) => {
 
   const login = useCallback(async (credentials) => {
     const result = await authService.login(credentials)
-    syncMockIdentity(result.session)
     const loadedRoles = await sessionService.listRoles().catch(() => [])
     setSession(result.session)
     setRoles(loadedRoles)
@@ -88,7 +84,6 @@ export const SessionProvider = ({ children }) => {
   // the whole session is re-read rather than patched locally.
   const refreshSession = useCallback(async () => {
     const updated = await sessionService.getSession()
-    syncMockIdentity(updated)
     setSession(updated)
     return updated
   }, [])
@@ -102,6 +97,7 @@ export const SessionProvider = ({ children }) => {
       permissions: session?.permissions ?? [],
       features: session?.features ?? {},
       workspaceIds: session?.workspaceIds ?? [],
+      mustChangePassword: Boolean(session?.mustChangePassword),
       roles,
       login,
       logout,

@@ -8,10 +8,7 @@ const FEATURES = [
   { key: "clients", name: "Clients" },
   { key: "employees", name: "Employees" },
   { key: "reports", name: "Workload reports" },
-  { key: "activity", name: "Activity log" },
-  { key: "performance", name: "Performance" },
-  { key: "recruitment", name: "Recruitment" },
-  { key: "compensation", name: "Compensation" }
+  { key: "activity", name: "Activity log" }
 ];
 
 const AUTOMATION_RULES = [

@@ -238,6 +238,7 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
     const current = boardRef.current
     if (!current) return
     onBoardChange?.({ ...current, columns: insertTask(current.columns, task.statusId, 0, task) })
+    setComposerColumnId(null)
     settle(task.id)
   }
 

@@ -4,10 +4,13 @@ import { Outlet } from 'react-router-dom'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { WorkspaceProvider } from '@/features/workspace/WorkspaceProvider'
+import { ChangePasswordDialog } from '@/features/auth/ChangePasswordDialog'
+import { useSession } from '@/hooks/useSession'
 import { colors, layout } from '@/theme/tokens'
 
 export const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false)
+  const { mustChangePassword } = useSession()
 
   return (
     <WorkspaceProvider>
@@ -40,6 +43,7 @@ export const AppLayout = () => {
           </Box>
         </Box>
       </Box>
+      <ChangePasswordDialog open={mustChangePassword} forced onClose={() => {}} />
     </WorkspaceProvider>
   )
 }

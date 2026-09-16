@@ -1,5 +1,5 @@
 import { Box } from '@mui/material'
-import { EMPLOYMENT_STATUS, INTERVIEW_STATUS, PERFORMANCE_STATUS, RECOMMENDATIONS } from '@/constants/domain'
+import { EMPLOYMENT_STATUS } from '@/constants/domain'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 
 const STATUS_TONE_MAP = {
@@ -8,19 +8,6 @@ const STATUS_TONE_MAP = {
   [EMPLOYMENT_STATUS.NOTICE_PERIOD]: 'orange',
   [EMPLOYMENT_STATUS.INACTIVE]: 'gray',
 
-  [INTERVIEW_STATUS.SCHEDULED]: 'blue',
-  [INTERVIEW_STATUS.RESCHEDULED]: 'amber',
-  [INTERVIEW_STATUS.CANCELLED]: 'rose',
-
-  [PERFORMANCE_STATUS.DRAFT]: 'gray',
-  [PERFORMANCE_STATUS.IN_PROGRESS]: 'blue',
-  [PERFORMANCE_STATUS.PENDING_EMPLOYEE]: 'amber',
-  Completed: 'green',
-
-  [RECOMMENDATIONS.STRONG_HIRE]: 'green',
-  [RECOMMENDATIONS.HIRE]: 'teal',
-  [RECOMMENDATIONS.HOLD]: 'amber',
-  [RECOMMENDATIONS.NO_HIRE]: 'rose',
 }
 
 const toneForStatus = (status) => STATUS_TONE_MAP[status] ?? 'slate'

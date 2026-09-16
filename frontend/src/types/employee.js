@@ -1,8 +1,4 @@
 /**
- * The employee domain deliberately carries no salary or compensation fields.
- * Compensation lives in its own domain and service so that it cannot leak into
- * employee, dashboard, recruitment or performance screens.
- *
  * @typedef {Object} Employee
  * @property {string} id
  * @property {string} employeeId

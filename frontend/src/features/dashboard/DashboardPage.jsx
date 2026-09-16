@@ -23,7 +23,7 @@ export const DashboardPage = () => {
   const isMaster = typeId === 1 || can(PERMISSIONS.WORKSPACE_CREATE)
   const isEmployee = typeId === 3 || (!isMaster && !can(PERMISSIONS.TASK_VIEW_ALL))
 
-  if (isEmployee) return <Navigate to={workspaceViewPath('board')} replace />
+  if (isEmployee || !can(PERMISSIONS.DASHBOARD_VIEW)) return <Navigate to={workspaceViewPath('board')} replace />
   if (isMaster) return <MasterAdminDashboard />
   return <WorkspaceDashboard />
 }

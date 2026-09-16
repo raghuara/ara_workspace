@@ -1,16 +1,12 @@
 import {
+  BadgeCheck,
   Building2,
-  CalendarDays,
-  ClipboardList,
+  KeyRound,
   History,
   LayoutDashboard,
-  ReceiptText,
   Settings2,
   ShieldCheck,
-  TrendingUp,
-  UserRoundPlus,
   Users,
-  Wallet,
 } from 'lucide-react'
 import { PERMISSIONS } from './permissions'
 import { FEATURES } from './features'
@@ -23,6 +19,7 @@ export const NAVIGATION = [
     to: ROUTES.dashboard,
     icon: LayoutDashboard,
     end: true,
+    permission: PERMISSIONS.DASHBOARD_VIEW,
   },
   {
     key: 'organisation',
@@ -52,64 +49,6 @@ export const NAVIGATION = [
         permission: PERMISSIONS.ACTIVITY_VIEW,
         feature: FEATURES.ACTIVITY_LOG,
       },
-      {
-        key: 'performance',
-        label: 'Performance',
-        to: ROUTES.performance,
-        icon: TrendingUp,
-        permission: PERMISSIONS.REVIEW_VIEW,
-        feature: FEATURES.PERFORMANCE,
-      },
-    ],
-  },
-  {
-    key: 'recruitment',
-    label: 'Recruitment',
-    feature: FEATURES.RECRUITMENT,
-    children: [
-      {
-        key: 'interview-schedule',
-        label: 'Interview Schedule',
-        to: ROUTES.interviewSchedule,
-        icon: CalendarDays,
-        permission: PERMISSIONS.INTERVIEW_VIEW,
-      },
-      {
-        key: 'interview-reviews',
-        label: 'Interview Reviews',
-        to: ROUTES.interviewReviews,
-        icon: ClipboardList,
-        permission: PERMISSIONS.REVIEW_VIEW,
-      },
-    ],
-  },
-  {
-    key: 'compensation',
-    label: 'Compensation',
-    restricted: true,
-    feature: FEATURES.COMPENSATION,
-    children: [
-      {
-        key: 'compensation-overview',
-        label: 'Salary Overview',
-        to: ROUTES.compensationOverview,
-        icon: Wallet,
-        permission: PERMISSIONS.COMPENSATION_VIEW,
-      },
-      {
-        key: 'compensation-increment',
-        label: 'Increment',
-        to: ROUTES.compensationIncrement,
-        icon: UserRoundPlus,
-        permission: PERMISSIONS.COMPENSATION_UPDATE,
-      },
-      {
-        key: 'compensation-history',
-        label: 'Salary History',
-        to: ROUTES.compensationHistory,
-        icon: ReceiptText,
-        permission: PERMISSIONS.COMPENSATION_HISTORY_VIEW,
-      },
     ],
   },
   {
@@ -121,7 +60,13 @@ export const NAVIGATION = [
         label: 'Workspaces',
         to: ROUTES.adminWorkspaces,
         icon: Settings2,
-        permission: PERMISSIONS.WORKSPACE_VIEW,
+        permission: [
+          PERMISSIONS.WORKSPACE_CREATE,
+          PERMISSIONS.WORKSPACE_UPDATE,
+          PERMISSIONS.GROUP_MANAGE,
+          PERMISSIONS.TEAM_MANAGE,
+          PERMISSIONS.STATUS_MANAGE,
+        ],
       },
       {
         key: 'admin-user-types',
@@ -138,10 +83,24 @@ export const NAVIGATION = [
         permission: PERMISSIONS.FEATURE_MANAGE,
       },
       {
+        key: 'admin-accounts',
+        label: 'Accounts',
+        to: ROUTES.adminAccounts,
+        icon: KeyRound,
+        permission: PERMISSIONS.USERTYPE_MANAGE,
+      },
+      {
         key: 'admin-departments',
         label: 'Departments',
         to: ROUTES.adminDepartments,
         icon: Building2,
+        permission: PERMISSIONS.EMPLOYEE_UPDATE,
+      },
+      {
+        key: 'admin-designations',
+        label: 'Designations',
+        to: ROUTES.adminDesignations,
+        icon: BadgeCheck,
         permission: PERMISSIONS.EMPLOYEE_UPDATE,
       },
     ],

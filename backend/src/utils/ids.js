@@ -6,7 +6,8 @@ const TABLES = {
   TEAM: "teams",
   COL: "status_columns",
   CLI: "clients",
-  TSK: "tasks"
+  TSK: "tasks",
+  RCR: "recurring_tasks"
 };
 
 const PADDING = {

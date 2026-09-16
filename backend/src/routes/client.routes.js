@@ -7,7 +7,7 @@ const router = express.Router();
 router.use(requireAuth);
 
 router.get("/", requirePermission("client.view"), clientController.listClients);
-router.get("/options", requirePermission("client.view"), clientController.listClientOptions);
+router.get("/options", requirePermission("task.view"), clientController.listClientOptions);
 router.post("/", requirePermission("client.create"), clientController.createClient);
 router.put("/:clientId", requirePermission("client.update"), clientController.updateClient);
 router.delete("/:clientId", requirePermission("client.delete"), clientController.deleteClient);

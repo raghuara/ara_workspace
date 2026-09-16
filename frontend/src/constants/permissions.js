@@ -18,6 +18,7 @@ export const PERMISSIONS = {
   TASK_ASSIGN: 'task.assign',
   TASK_MOVE: 'task.move',
   TASK_WEIGHTAGE_SET: 'task.weightage.set',
+  TASK_RECURRING: 'task.recurring',
 
   // Clients
   CLIENT_VIEW: 'client.view',
@@ -29,6 +30,9 @@ export const PERMISSIONS = {
   EMPLOYEE_VIEW: 'employee.view',
   EMPLOYEE_UPDATE: 'employee.update',
 
+  // Insight
+  DASHBOARD_VIEW: 'dashboard.view',
+
   // Administration
   USERTYPE_VIEW: 'usertype.view',
   USERTYPE_MANAGE: 'usertype.manage',
@@ -36,14 +40,6 @@ export const PERMISSIONS = {
   ACTIVITY_VIEW: 'activity.view',
   REPORT_VIEW: 'report.view',
 
-  // Retained modules (currently disabled via feature access)
-  INTERVIEW_VIEW: 'interview.view',
-  INTERVIEW_UPDATE: 'interview.update',
-  REVIEW_VIEW: 'review.view',
-  REVIEW_UPDATE: 'review.update',
-  COMPENSATION_VIEW: 'compensation.view',
-  COMPENSATION_UPDATE: 'compensation.update',
-  COMPENSATION_HISTORY_VIEW: 'compensation.history.view',
 }
 
 /**
@@ -79,6 +75,7 @@ export const PERMISSION_CATALOG = [
       { key: PERMISSIONS.TASK_ASSIGN, label: 'Assign tasks to people' },
       { key: PERMISSIONS.TASK_MOVE, label: 'Move tasks between columns' },
       { key: PERMISSIONS.TASK_WEIGHTAGE_SET, label: 'Set task size and weightage' },
+      { key: PERMISSIONS.TASK_RECURRING, label: 'Manage recurring tasks' },
     ],
   },
   {
@@ -102,15 +99,23 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    key: 'insight',
+    label: 'Insight',
+    description: 'Dashboards, reports and the activity log',
+    permissions: [
+      { key: PERMISSIONS.DASHBOARD_VIEW, label: 'View the dashboard' },
+      { key: PERMISSIONS.REPORT_VIEW, label: 'View workload and reports' },
+      { key: PERMISSIONS.ACTIVITY_VIEW, label: 'View the activity log' },
+    ],
+  },
+  {
     key: 'admin',
     label: 'Administration',
-    description: 'Roles, feature access and audit history',
+    description: 'Roles, logins and feature access',
     permissions: [
       { key: PERMISSIONS.USERTYPE_VIEW, label: 'View user types' },
-      { key: PERMISSIONS.USERTYPE_MANAGE, label: 'Create and edit user types' },
+      { key: PERMISSIONS.USERTYPE_MANAGE, label: 'Create and edit user types, manage logins' },
       { key: PERMISSIONS.FEATURE_MANAGE, label: 'Turn features on and off' },
-      { key: PERMISSIONS.ACTIVITY_VIEW, label: 'View the activity log' },
-      { key: PERMISSIONS.REPORT_VIEW, label: 'View workload and reports' },
     ],
   },
 ]

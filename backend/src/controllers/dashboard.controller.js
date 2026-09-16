@@ -262,15 +262,15 @@ const getOverview = async (req, res) => {
 
   const directory = await dashboardModel.findEmployeeDirectory();
   const workspaces = [];
+  const assignedPeople = new Set();
   for (const workspaceId of workspaceIds) {
     const snapshot = await dashboardModel.loadWorkspaceSnapshot(workspaceId);
-    if (snapshot) workspaces.push(summariseWorkspace(snapshot, directory));
+    if (!snapshot) continue;
+    workspaces.push(summariseWorkspace(snapshot, directory));
+    snapshot.members.forEach((member) => assignedPeople.add(member.employeeId));
   }
 
-  res.json({
-    isOrganisationWide,
-    workspaces,
-    totals: workspaces.reduce(
+  const totals = workspaces.reduce(
       (acc, workspace) => ({
         workspaces: acc.workspaces + 1,
         members: acc.members + workspace.members,
@@ -283,7 +283,16 @@ const getOverview = async (req, res) => {
         points: acc.points + workspace.points
       }),
       { workspaces: 0, members: 0, tasks: 0, open: 0, completed: 0, inCorrection: 0, correctionMoves: 0, overdue: 0, points: 0 }
-    )
+    );
+
+  res.json({
+    isOrganisationWide,
+    workspaces,
+    totals: {
+      ...totals,
+      employees: await dashboardModel.countActiveEmployees(),
+      assigned: assignedPeople.size
+    }
   });
 };
 

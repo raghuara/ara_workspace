@@ -41,6 +41,9 @@ export const workspaceService = {
   addMember: (workspaceId, payload) =>
     apiRequest(`/workspaces/${id(workspaceId)}/members`, { method: 'POST', body: payload }),
 
+  updateMember: (workspaceId, employeeId, payload) =>
+    apiRequest(`/workspaces/${id(workspaceId)}/members/${id(employeeId)}`, { method: 'PUT', body: payload }),
+
   removeMember: (workspaceId, employeeId) =>
     apiRequest(`/workspaces/${id(workspaceId)}/members/${id(employeeId)}`, { method: 'DELETE' }),
 }

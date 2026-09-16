@@ -58,6 +58,7 @@ export const MasterAdminDashboard = () => {
     .sort((a, b) => b.assigned - a.assigned || b.correctionMoves - a.correctionMoves)
 
   const completionRate = totals?.tasks ? Math.round((totals.completed / totals.tasks) * 100) : 0
+  const unassignedPeople = Math.max(0, (totals?.employees ?? 0) - (totals?.assigned ?? 0))
 
   const completionRows = workspaces
     .flatMap((workspace) =>
@@ -93,7 +94,18 @@ export const MasterAdminDashboard = () => {
           <Stack spacing={GAP}>
             <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', xl: 'repeat(6, 1fr)' } }}>
               <StatCard label="Workspaces" value={totals.workspaces} icon={Building2} tone="blue" helperText={`${workspaces.reduce((sum, workspace) => sum + workspace.groups, 0)} groups · ${allTeams.length} teams`} />
-              <StatCard label="People" value={totals.members} icon={Users} tone="violet" helperText="across all workspaces" />
+              <StatCard
+                label="Employees"
+                value={totals.employees}
+                icon={Users}
+                tone="violet"
+                helperText={
+                  unassignedPeople > 0
+                    ? `${totals.assigned} in workspaces · ${unassignedPeople} not yet assigned`
+                    : `${totals.assigned} in workspaces · everyone placed`
+                }
+                progress={totals.employees ? Math.round((totals.assigned / totals.employees) * 100) : 0}
+              />
               <StatCard label="Open tasks" value={totals.open} icon={ClipboardList} tone="teal" helperText={`${totals.tasks} in total`} />
               <StatCard
                 label="Completed"

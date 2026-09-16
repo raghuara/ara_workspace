@@ -110,6 +110,11 @@ const findEmployeeStats = async () => {
   return { totals, departments };
 };
 
+const countActiveEmployees = async () => {
+  const [[{ total }]] = await pool.query("SELECT COUNT(*) AS total FROM employees WHERE status <> 'Inactive'");
+  return total;
+};
+
 const findRecentEmployees = async (limit) => {
   const [rows] = await pool.query(
     `SELECT employee_id, CONCAT(first_name, ' ', last_name) AS full_name, designation, department,
@@ -124,5 +129,6 @@ module.exports = {
   findEmployeeDirectory,
   loadWorkspaceSnapshot,
   findEmployeeStats,
+  countActiveEmployees,
   findRecentEmployees
 };

@@ -8,9 +8,9 @@ import { usePermissions } from '@/hooks/usePermissions'
  * the backend must reject the underlying requests independently.
  */
 export const RequirePermission = ({ permission, title = 'Access restricted', breadcrumbs, children }) => {
-  const { can } = usePermissions()
+  const { can, canAny } = usePermissions()
 
-  if (can(permission)) return <>{children}</>
+  if (Array.isArray(permission) ? canAny(permission) : can(permission)) return <>{children}</>
 
   return (
     <Box>

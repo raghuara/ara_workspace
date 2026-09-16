@@ -13,7 +13,4 @@ INSERT INTO features (feature_key, enabled) VALUES
   ('clients', TRUE),
   ('employees', TRUE),
   ('reports', TRUE),
-  ('activity', TRUE),
-  ('performance', TRUE),
-  ('recruitment', FALSE),
-  ('compensation', FALSE);
+  ('activity', TRUE);

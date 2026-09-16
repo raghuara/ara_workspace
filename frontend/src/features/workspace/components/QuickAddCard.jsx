@@ -151,8 +151,6 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
         scheduledDate: scheduled ? values.dueDate || daysFromNow(1) : null,
       })
       onCreated(saved)
-      setTitle('')
-      inputRef.current?.focus()
     } catch (caught) {
       setError(caught?.message ?? 'The task could not be created.')
     } finally {

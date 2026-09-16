@@ -15,12 +15,10 @@ import { colors } from '@/theme/tokens'
 import { EmployeeFormDialog } from './EmployeeFormDialog'
 import { OverviewTab } from './tabs/OverviewTab'
 import { EmploymentTab } from './tabs/EmploymentTab'
-import { PerformanceTab } from './tabs/PerformanceTab'
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
   { value: 'employment', label: 'Employment' },
-  { value: 'performance', label: 'Performance' },
 ]
 
 export const EmployeeDetailPage = () => {
@@ -138,7 +136,6 @@ export const EmployeeDetailPage = () => {
           <Box role="tabpanel">
             {activeTab === 'overview' ? <OverviewTab employee={employee} /> : null}
             {activeTab === 'employment' ? <EmploymentTab employee={employee} /> : null}
-            {activeTab === 'performance' ? <PerformanceTab employeeId={employee.id} /> : null}
           </Box>
         )}
       </QueryStateView>

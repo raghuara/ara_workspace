@@ -104,7 +104,7 @@ const RowMenu = ({ rule, canEdit, onEdit, onToggle, onDelete }) => {
 export const RecurringTasksPage = () => {
   const { can } = usePermissions()
   const { activeWorkspace, activeWorkspaceId } = useWorkspace()
-  const canEdit = can(PERMISSIONS.TASK_CREATE)
+  const canEdit = can(PERMISSIONS.TASK_RECURRING)
 
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')

@@ -35,6 +35,7 @@ router.put("/columns/:columnId", canManageColumns, workspaceController.updateCol
 router.delete("/columns/:columnId", canManageColumns, workspaceController.deleteColumn);
 
 router.post("/workspaces/:workspaceId/members", canUpdate, workspaceController.addMember);
+router.put("/workspaces/:workspaceId/members/:employeeId", canUpdate, workspaceController.updateMember);
 router.delete("/workspaces/:workspaceId/members/:employeeId", canUpdate, workspaceController.removeMember);
 
 module.exports = router;

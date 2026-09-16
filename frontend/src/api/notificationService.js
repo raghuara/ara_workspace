@@ -1,13 +1,9 @@
-import { notificationSeed } from '@/mock/notifications'
-import { daysFromNow } from '@/utils/date'
-import { mockRequest } from './httpClient'
+import { apiRequest, toQueryString } from './httpClient'
 
 export const notificationService = {
-  listNotifications: () =>
-    mockRequest(() =>
-      notificationSeed.map(({ dayOffset, ...notification }) => ({
-        ...notification,
-        createdOn: daysFromNow(dayOffset),
-      })),
-    ),
+  listNotifications: ({ limit = 20 } = {}) => apiRequest(`/notifications${toQueryString({ limit })}`),
+
+  markRead: (notificationId) => apiRequest(`/notifications/${encodeURIComponent(notificationId)}/read`, { method: 'POST' }),
+
+  markAllRead: () => apiRequest('/notifications/read-all', { method: 'POST' }),
 }

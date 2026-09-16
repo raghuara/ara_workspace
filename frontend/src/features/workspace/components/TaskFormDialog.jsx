@@ -48,13 +48,13 @@ const SCHEDULE_TABS = [
   },
 ]
 
-const validate = (values, mode) => {
+const validate = (values, mode, { canAssign }) => {
   const errors = {}
   if (!values.title.trim()) errors.title = 'A task title is required.'
   if (!values.clientId) errors.clientId = 'Choose the client this task belongs to.'
   if (!values.groupId) errors.groupId = 'Choose a group.'
   if (!values.statusId) errors.statusId = 'Choose a board column.'
-  if (values.assigneeIds.length === 0) errors.assigneeIds = 'Assign at least one person.'
+  if (canAssign && values.assigneeIds.length === 0) errors.assigneeIds = 'Assign at least one person.'
 
   if (mode === SCHEDULE_MODES.SCHEDULED) {
     if (!values.scheduledDate) errors.scheduledDate = 'Pick the date this task should start.'
@@ -99,6 +99,7 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
   const [errors, setErrors] = useState({})
 
   const { can } = usePermissions()
+  const canAssign = can(PERMISSIONS.TASK_ASSIGN)
   const fileInputRef = useRef(null)
   // Images chosen before the task exists. They upload right after creation,
   // against the new task id, so the form feels like one step.
@@ -137,12 +138,14 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    const validationErrors = validate(values, mode)
+    const validationErrors = validate(values, mode, { canAssign })
     setErrors(validationErrors)
     if (Object.keys(validationErrors).length > 0) return
 
+    const { assigneeIds, ...rest } = values
     const payload = {
-      ...values,
+      ...rest,
+      ...(canAssign ? { assigneeIds } : {}),
       points: size.points,
       dueDate: mode === SCHEDULE_MODES.SCHEDULED ? values.scheduledDate : values.dueDate,
       scheduledDate: mode === SCHEDULE_MODES.SCHEDULED ? values.scheduledDate : null,
@@ -300,30 +303,40 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
             )}
           </Box>
 
-          <TextField
-            select
-            label="Assignees"
-            value={values.assigneeIds}
-            onChange={(event) => {
-              setValues((current) => ({ ...current, assigneeIds: event.target.value }))
-              setErrors((current) => ({ ...current, assigneeIds: undefined }))
-            }}
-            error={Boolean(errors.assigneeIds)}
-            helperText={errors.assigneeIds ?? ' '}
-            size="small"
-            fullWidth
-            required
-            slotProps={{ select: { multiple: true } }}
-          >
-            {assignableMembers.map((member) => (
-              <MenuItem key={member.employeeId} value={member.employeeId}>
-                {member.fullName}
-              </MenuItem>
-            ))}
-          </TextField>
+          {canAssign ? (
+            <TextField
+              select
+              label="Assignees"
+              value={values.assigneeIds}
+              onChange={(event) => {
+                setValues((current) => ({ ...current, assigneeIds: event.target.value }))
+                setErrors((current) => ({ ...current, assigneeIds: undefined }))
+              }}
+              error={Boolean(errors.assigneeIds)}
+              helperText={errors.assigneeIds ?? ' '}
+              size="small"
+              fullWidth
+              required
+              slotProps={{ select: { multiple: true } }}
+            >
+              {assignableMembers.map((member) => (
+                <MenuItem key={member.employeeId} value={member.employeeId}>
+                  {member.fullName}
+                </MenuItem>
+              ))}
+            </TextField>
+          ) : (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {isEditing ? 'Assignees can only be changed by a lead or admin.' : 'This task will be assigned to you.'}
+            </Alert>
+          )}
 
           {weightageOn ? (
-            <SizePicker value={values.sizeKey} onChange={(sizeKey) => setValues((current) => ({ ...current, sizeKey }))} sx={{ mb: 2 }} />
+            <SizePicker
+              value={values.sizeKey}
+              onChange={(sizeKey) => setValues((current) => ({ ...current, sizeKey }))}
+              sx={{ mb: 2 }}
+            />
           ) : null}
 
           {isEditing ? (
@@ -353,7 +366,12 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
                   }}
                   aria-label="Choose reference images"
                 />
-                <Button size="small" variant="outlined" startIcon={<ImagePlus size={14} strokeWidth={1.75} />} onClick={() => fileInputRef.current?.click()}>
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<ImagePlus size={14} strokeWidth={1.75} />}
+                  onClick={() => fileInputRef.current?.click()}
+                >
                   Add images
                 </Button>
               </Stack>
@@ -372,17 +390,38 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
                   {queued.map((file, index) => (
                     <Box
                       key={`${file.name}-${index}`}
-                      sx={{ position: 'relative', aspectRatio: '1 / 1', borderRadius: 2, overflow: 'hidden', border: `1px solid ${colors.border}` }}
+                      sx={{
+                        position: 'relative',
+                        aspectRatio: '1 / 1',
+                        borderRadius: 2,
+                        overflow: 'hidden',
+                        border: `1px solid ${colors.border}`,
+                      }}
                     >
-                      <Box component="img" src={URL.createObjectURL(file)} alt={file.name} sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                      <Box
+                        component="img"
+                        src={URL.createObjectURL(file)}
+                        alt={file.name}
+                        sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                      />
                       <Box
                         component="button"
                         type="button"
                         aria-label={`Remove ${file.name}`}
                         onClick={() => setQueued((current) => current.filter((_, i) => i !== index))}
                         sx={{
-                          position: 'absolute', top: 3, right: 3, width: 20, height: 20, borderRadius: '50%', border: 0,
-                          display: 'grid', placeItems: 'center', cursor: 'pointer', bgcolor: 'rgba(255,255,255,0.92)', color: colors.textPrimary,
+                          position: 'absolute',
+                          top: 3,
+                          right: 3,
+                          width: 20,
+                          height: 20,
+                          borderRadius: '50%',
+                          border: 0,
+                          display: 'grid',
+                          placeItems: 'center',
+                          cursor: 'pointer',
+                          bgcolor: 'rgba(255,255,255,0.92)',
+                          color: colors.textPrimary,
                         }}
                       >
                         <X size={12} strokeWidth={2} />

@@ -32,12 +32,14 @@ const NavItem = ({ item, active, onNavigate }) => (
 )
 
 export const Sidebar = ({ onNavigate }) => {
-  const { can } = usePermissions()
+  const { can, canAny } = usePermissions()
   const { isEnabled } = useFeatures()
   const { pathname } = useLocation()
 
+  const allowed = (permission) => (Array.isArray(permission) ? canAny(permission) : can(permission))
+
   const isVisible = (item) =>
-    (!item.permission || can(item.permission)) && (!item.feature || isEnabled(item.feature))
+    (!item.permission || allowed(item.permission)) && (!item.feature || isEnabled(item.feature))
 
   return (
     <Box

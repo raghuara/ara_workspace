@@ -20,15 +20,9 @@ export const ROUTES = {
   adminUserTypes: '/admin/user-types',
   adminFeatures: '/admin/features',
   adminDepartments: '/admin/departments',
+  adminDesignations: '/admin/designations',
+  adminAccounts: '/admin/accounts',
 
-  recruitment: '/recruitment',
-  interviewSchedule: '/recruitment/schedule',
-  interviewReviews: '/recruitment/reviews',
-  performance: '/performance',
-  compensation: '/compensation',
-  compensationOverview: '/compensation/overview',
-  compensationIncrement: '/compensation/increment',
-  compensationHistory: '/compensation/history',
 }
 
 export const DEFAULT_VIEW = 'board'

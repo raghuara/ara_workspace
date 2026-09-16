@@ -15,13 +15,14 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Building2, Layers, Plus, Trash2, UsersRound } from 'lucide-react'
+import { Building2, Eye, Layers, Pencil, Plus, Trash2, UsersRound } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SectionCard } from '@/components/SectionCard'
 import { EmptyState } from '@/components/EmptyState'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
+import { PeoplePicker } from '@/components/PeoplePicker'
 import { workspaceService } from '@/api/workspaceService'
 import { employeeService } from '@/api/employeeService'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -41,7 +42,11 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
   const submit = async (event) => {
     event.preventDefault()
     setError('')
-    const missing = fields.find((field) => field.required && !String(values[field.name]).trim())
+    const missing = fields.find(
+      (field) =>
+        field.required &&
+        (Array.isArray(values[field.name]) ? values[field.name].length === 0 : !String(values[field.name]).trim()),
+    )
     if (missing) {
       setError(`${missing.label} is required.`)
       return
@@ -68,44 +73,61 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
             </Alert>
           ) : null}
           <Stack spacing={1.5} sx={{ pt: 1 }}>
-            {fields.map((field) => (
-              <TextField
-                key={field.name}
-                label={field.label}
-                value={values[field.name]}
-                onChange={(event) => setValues((c) => ({ ...c, [field.name]: event.target.value }))}
-                size="small"
-                fullWidth
-                required={field.required}
-                select={Boolean(field.options)}
-                multiline={field.multiline}
-                minRows={field.multiline ? 2 : undefined}
-                helperText={field.helperText}
-                slotProps={{
-                  select: {
-                    renderValue: (selected) => {
-                      const option = field.options?.find((candidate) => candidate.value === selected)
-                      return option ? option.label : ''
+            {fields.map((field) =>
+              field.people ? (
+                <PeoplePicker
+                  key={field.name}
+                  label={field.label}
+                  options={field.people}
+                  multiple={Boolean(field.multiple)}
+                  value={values[field.name]}
+                  onChange={(next) => setValues((c) => ({ ...c, [field.name]: next }))}
+                  required={field.required}
+                  helperText={field.helperText}
+                />
+              ) : (
+                <TextField
+                  key={field.name}
+                  label={field.label}
+                  value={values[field.name]}
+                  onChange={(event) => setValues((c) => ({ ...c, [field.name]: event.target.value }))}
+                  size="small"
+                  fullWidth
+                  required={field.required}
+                  select={Boolean(field.options)}
+                  multiline={field.multiline}
+                  minRows={field.multiline ? 2 : undefined}
+                  helperText={field.helperText}
+                  slotProps={{
+                    select: {
+                      multiple: Boolean(field.multiple),
+                      renderValue: (selected) => {
+                        const picked = Array.isArray(selected) ? selected : [selected]
+                        return picked
+                          .map((value) => field.options?.find((candidate) => candidate.value === value)?.label)
+                          .filter(Boolean)
+                          .join(', ')
+                      },
                     },
-                  },
-                }}
-              >
-                {field.options?.map((option) => (
-                  <MenuItem key={option.value} value={option.value}>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="body2" noWrap>
-                        {option.label}
-                      </Typography>
-                      {option.secondary ? (
-                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                          {option.secondary}
+                  }}
+                >
+                  {field.options?.map((option) => (
+                    <MenuItem key={option.value} value={option.value}>
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" noWrap>
+                          {option.label}
                         </Typography>
-                      ) : null}
-                    </Box>
-                  </MenuItem>
-                ))}
-              </TextField>
-            ))}
+                        {option.secondary ? (
+                          <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                            {option.secondary}
+                          </Typography>
+                        ) : null}
+                      </Box>
+                    </MenuItem>
+                  ))}
+                </TextField>
+              ),
+            )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 1.5 }}>
@@ -123,19 +145,38 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
 
 export const WorkspaceAdminPage = () => {
   const { can } = usePermissions()
-  const { workspaces, activeWorkspace, activeWorkspaceId, groups, refreshStructure, refreshWorkspaces, selectWorkspace } =
-    useWorkspace()
+  const {
+    workspaces,
+    activeWorkspace,
+    activeWorkspaceId,
+    groups,
+    members,
+    refreshStructure,
+    refreshWorkspaces,
+    selectWorkspace,
+  } = useWorkspace()
+  const [scopeBusyId, setScopeBusyId] = useState(null)
+  const [scopeError, setScopeError] = useState('')
+
+  const changeScope = async (member, taskScope) => {
+    setScopeError('')
+    setScopeBusyId(member.employeeId)
+    try {
+      await workspaceService.updateMember(activeWorkspaceId, member.employeeId, { taskScope })
+      refreshStructure()
+    } catch (caught) {
+      setScopeError(caught.message ?? 'The visibility setting could not be saved.')
+    } finally {
+      setScopeBusyId(null)
+    }
+  }
 
   const people = useAsync(employeeService.getEmployeeOptions, [])
   const [dialog, setDialog] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
 
-  const adminOptions = (people.data ?? []).map((person) => ({
-    value: person.id,
-    label: person.fullName,
-    secondary: [person.employeeId, person.department, person.designation].filter(Boolean).join(' · '),
-  }))
+  const peopleOptions = people.data ?? []
 
   const confirmDelete = async () => {
     setDeleteError('')
@@ -166,10 +207,19 @@ export const WorkspaceAdminPage = () => {
                   submitLabel: 'Create workspace',
                   fields: [
                     { name: 'name', label: 'Workspace name', required: true },
-                    { name: 'shortName', label: 'Short code', helperText: 'Two or three letters shown on the switcher.' },
+                    {
+                      name: 'shortName',
+                      label: 'Short code',
+                      helperText: 'Two or three letters shown on the switcher.',
+                    },
                     { name: 'description', label: 'Description', multiline: true },
-                    { name: 'tone', label: 'Colour', options: TONE_KEYS.map((t) => ({ value: t, label: t })), initial: 'blue' },
-                    { name: 'adminId', label: 'Workspace admin', options: adminOptions },
+                    {
+                      name: 'tone',
+                      label: 'Colour',
+                      options: TONE_KEYS.map((t) => ({ value: t, label: t })),
+                      initial: 'blue',
+                    },
+                    { name: 'adminId', label: 'Workspace admin', people: peopleOptions },
                   ],
                   onSubmit: async (values) => {
                     await workspaceService.createWorkspace({
@@ -244,8 +294,13 @@ export const WorkspaceAdminPage = () => {
                   submitLabel: 'Create group',
                   fields: [
                     { name: 'name', label: 'Group name', required: true },
-                    { name: 'tone', label: 'Colour', options: TONE_KEYS.map((t) => ({ value: t, label: t })), initial: 'blue' },
-                    { name: 'leadId', label: 'Group lead', options: adminOptions },
+                    {
+                      name: 'tone',
+                      label: 'Colour',
+                      options: TONE_KEYS.map((t) => ({ value: t, label: t })),
+                      initial: 'blue',
+                    },
+                    { name: 'leadId', label: 'Group lead', people: peopleOptions },
                   ],
                   onSubmit: async (values) => {
                     await workspaceService.createGroup(activeWorkspaceId, values)
@@ -260,7 +315,11 @@ export const WorkspaceAdminPage = () => {
         }
       >
         {groups.length === 0 ? (
-          <EmptyState icon={Layers} title="No groups yet" description="Add a group to start organising teams and work." />
+          <EmptyState
+            icon={Layers}
+            title="No groups yet"
+            description="Add a group to start organising teams and work."
+          />
         ) : (
           <Stack spacing={2}>
             {groups.map((group) => (
@@ -268,7 +327,14 @@ export const WorkspaceAdminPage = () => {
                 <Stack
                   direction="row"
                   spacing={1}
-                  sx={{ alignItems: 'center', px: 2, py: 1.5, bgcolor: colors.page, borderTopLeftRadius: 8, borderTopRightRadius: 8 }}
+                  sx={{
+                    alignItems: 'center',
+                    px: 2,
+                    py: 1.5,
+                    bgcolor: colors.page,
+                    borderTopLeftRadius: 8,
+                    borderTopRightRadius: 8,
+                  }}
                 >
                   <ToneChip label={group.name} tone={group.tone} size="medium" />
                   <Typography variant="caption" sx={{ flex: 1 }}>
@@ -284,7 +350,15 @@ export const WorkspaceAdminPage = () => {
                           submitLabel: 'Create team',
                           fields: [
                             { name: 'name', label: 'Team name', required: true },
-                            { name: 'leadId', label: 'Team lead', options: adminOptions },
+                            { name: 'leadId', label: 'Team lead', people: peopleOptions },
+                            {
+                              name: 'memberIds',
+                              label: 'Members',
+                              people: peopleOptions,
+                              multiple: true,
+                              initial: [],
+                              helperText: 'Tick everyone on this team. Members join the workspace automatically.',
+                            },
                           ],
                           onSubmit: async (values) => {
                             await workspaceService.createTeam(group.id, values)
@@ -323,13 +397,15 @@ export const WorkspaceAdminPage = () => {
                       key={team.id}
                       direction={{ xs: 'column', sm: 'row' }}
                       spacing={1.5}
-                      sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, px: 2, py: 1.25, borderBottom: `1px solid ${colors.border}`, '&:last-of-type': { borderBottom: 0 } }}
+                      sx={{
+                        alignItems: { xs: 'flex-start', sm: 'center' },
+                        px: 2,
+                        py: 1.25,
+                        borderBottom: `1px solid ${colors.border}`,
+                        '&:last-of-type': { borderBottom: 0 },
+                      }}
                     >
-                      <Stack
-                        direction="row"
-                        spacing={1}
-                        sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}
-                      >
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
                         <UsersRound size={15} strokeWidth={1.75} color={colors.textSecondary} aria-hidden="true" />
                         <Typography variant="body2" fontWeight={600}>
                           {team.name}
@@ -345,6 +421,42 @@ export const WorkspaceAdminPage = () => {
                           </Tooltip>
                         ))}
                       </Stack>
+                      {can(PERMISSIONS.TEAM_MANAGE) ? (
+                        <Tooltip title="Edit team">
+                          <IconButton
+                            size="small"
+                            aria-label={`Edit ${team.name}`}
+                            onClick={() =>
+                              setDialog({
+                                title: `Edit ${team.name}`,
+                                submitLabel: 'Save team',
+                                fields: [
+                                  { name: 'name', label: 'Team name', required: true, initial: team.name },
+                                  {
+                                    name: 'leadId',
+                                    label: 'Team lead',
+                                    people: peopleOptions,
+                                    initial: team.leadId ?? '',
+                                  },
+                                  {
+                                    name: 'memberIds',
+                                    label: 'Members',
+                                    people: peopleOptions,
+                                    multiple: true,
+                                    initial: team.memberIds ?? [],
+                                  },
+                                ],
+                                onSubmit: async (values) => {
+                                  await workspaceService.updateTeam(team.id, values)
+                                  await refreshStructure()
+                                },
+                              })
+                            }
+                          >
+                            <Pencil size={15} strokeWidth={1.75} />
+                          </IconButton>
+                        </Tooltip>
+                      ) : null}
                       {can(PERMISSIONS.TEAM_MANAGE) ? (
                         <Tooltip title="Delete team">
                           <IconButton
@@ -367,6 +479,89 @@ export const WorkspaceAdminPage = () => {
           </Stack>
         )}
       </SectionCard>
+
+      {activeWorkspace ? (
+        <SectionCard
+          title="Members"
+          description="Who belongs to this workspace and how much of the board each person sees"
+          padded={false}
+        >
+          {scopeError ? (
+            <Alert severity="error" sx={{ m: 2 }} onClose={() => setScopeError('')}>
+              {scopeError}
+            </Alert>
+          ) : null}
+          {members.length === 0 ? (
+            <EmptyState
+              icon={UsersRound}
+              title="No members yet"
+              description="Add people to a team and they join the workspace."
+            />
+          ) : (
+            <Stack>
+              {members.map((member) => {
+                const seesEverything = member.userTypeId === 1 || member.userTypeId === 2
+                return (
+                  <Stack
+                    key={member.employeeId}
+                    direction={{ xs: 'column', sm: 'row' }}
+                    spacing={1.5}
+                    sx={{
+                      alignItems: { xs: 'flex-start', sm: 'center' },
+                      px: 2,
+                      py: 1.25,
+                      borderBottom: `1px solid ${colors.border}`,
+                      '&:last-of-type': { borderBottom: 0 },
+                    }}
+                  >
+                    <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
+                      <UserAvatar name={member.fullName} size={30} />
+                      <Box sx={{ minWidth: 0 }}>
+                        <Typography variant="body2" fontWeight={600} noWrap>
+                          {member.fullName}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                          {member.employeeId} · {member.designation}
+                        </Typography>
+                      </Box>
+                    </Stack>
+                    <ToneChip label={member.userTypeName} tone={seesEverything ? 'violet' : 'slate'} />
+                    {seesEverything ? (
+                      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 200 }}>
+                        Sees every task
+                      </Typography>
+                    ) : can(PERMISSIONS.WORKSPACE_UPDATE) ? (
+                      <TextField
+                        select
+                        size="small"
+                        value={member.taskScope ?? 'team'}
+                        disabled={scopeBusyId === member.employeeId}
+                        onChange={(event) => changeScope(member, event.target.value)}
+                        sx={{ minWidth: 200 }}
+                        slotProps={{
+                          select: { 'aria-label': `Task visibility for ${member.fullName}` },
+                          input: {
+                            startAdornment: (
+                              <Eye size={14} strokeWidth={1.75} style={{ marginRight: 8 }} aria-hidden="true" />
+                            ),
+                          },
+                        }}
+                      >
+                        <MenuItem value="own">Own tasks only</MenuItem>
+                        <MenuItem value="team">Own + team tasks</MenuItem>
+                      </TextField>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 200 }}>
+                        {member.taskScope === 'own' ? 'Own tasks only' : 'Own + team tasks'}
+                      </Typography>
+                    )}
+                  </Stack>
+                )
+              })}
+            </Stack>
+          )}
+        </SectionCard>
+      ) : null}
 
       {workspaces.length === 0 ? (
         <EmptyState icon={Building2} title="No workspaces" description="Create a workspace to get started." />

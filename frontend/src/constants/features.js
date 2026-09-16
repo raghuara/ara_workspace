@@ -1,11 +1,3 @@
-/**
- * Feature access registry. Turning a feature off hides its navigation, blocks
- * its routes and disables the related UI everywhere — this is how Recruitment
- * and Compensation are currently hidden rather than deleted, so they can be
- * switched back on without restoring any code.
- *
- * `locked: true` marks features the product cannot run without.
- */
 export const FEATURES = {
   WORKSPACES: 'workspaces',
   BOARD_VIEW: 'view.board',
@@ -18,9 +10,6 @@ export const FEATURES = {
   EMPLOYEES: 'employees',
   ACTIVITY_LOG: 'activity',
   REPORTS: 'reports',
-  RECRUITMENT: 'recruitment',
-  PERFORMANCE: 'performance',
-  COMPENSATION: 'compensation',
 }
 
 export const FEATURE_CATALOG = [
@@ -106,30 +95,6 @@ export const FEATURE_CATALOG = [
         name: 'Activity log',
         description: 'Organisation-wide audit trail of every change.',
         defaultEnabled: true,
-      },
-    ],
-  },
-  {
-    key: 'hr',
-    label: 'HR modules',
-    features: [
-      {
-        key: FEATURES.PERFORMANCE,
-        name: 'Performance',
-        description: 'Employee review cycles, ratings and goals.',
-        defaultEnabled: true,
-      },
-      {
-        key: FEATURES.RECRUITMENT,
-        name: 'Recruitment',
-        description: 'Interview schedule and interview scorecards.',
-        defaultEnabled: false,
-      },
-      {
-        key: FEATURES.COMPENSATION,
-        name: 'Compensation',
-        description: 'Salary overview, increments and salary history. Restricted module.',
-        defaultEnabled: false,
       },
     ],
   },

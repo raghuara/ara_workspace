@@ -163,7 +163,7 @@ export const WorkspaceNavTree = ({ onNavigate }) => {
           </ListItemButton>
         ) : null}
 
-        {isEnabled(FEATURES.RECURRING_TASKS) ? (
+        {can(PERMISSIONS.TASK_RECURRING) && isEnabled(FEATURES.RECURRING_TASKS) ? (
           <ListItemButton
             component={Link}
             to={ROUTES.recurring}

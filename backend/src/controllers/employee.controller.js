@@ -1,5 +1,5 @@
 const employeeModel = require("../models/employee.model");
-const departmentModel = require("../models/department.model");
+const { departmentModel, designationModel } = require("../models/catalog.model");
 const { EMPLOYMENT_STATUSES, EMPLOYMENT_TYPES, WORK_LOCATIONS } = require("../constants/employee");
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -55,9 +55,12 @@ const validateEmployee = async (body = {}) => {
   else if (!EMAIL_PATTERN.test(data.email)) errors.email = "Enter a valid email address.";
 
   if (!data.designation) errors.designation = "Designation is required.";
+  else if (!(await designationModel.findActiveByName(data.designation))) {
+    errors.designation = "Unknown or inactive designation.";
+  }
 
   if (!data.department) errors.department = "Department is required.";
-  else if (!(await departmentModel.findActiveDepartmentByName(data.department))) {
+  else if (!(await departmentModel.findActiveByName(data.department))) {
     errors.department = "Unknown or inactive department.";
   }
 

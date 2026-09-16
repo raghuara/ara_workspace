@@ -1,5 +1,7 @@
 const taskModel = require("../models/task.model");
 const workspaceModel = require("../models/workspace.model");
+const { runRecurringTasks } = require("../services/recurring.service");
+const notifications = require("../services/notification.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
 const { PRIORITIES, TASK_SIZES, USER_TYPE } = require("../constants/workspace");
@@ -98,13 +100,27 @@ const ensureWorkspaceAccess = async (req, res, workspaceId) => {
   return true;
 };
 
-const visibilityFor = async (req) => {
+const visibilityFor = async (req, workspaceId) => {
   if (can(req, "task.view.all")) return null;
+  const scope = await workspaceModel.findMemberScope(workspaceId, req.user.employeeId);
   return {
     employeeId: req.user.employeeId,
-    teamIds: await taskModel.findTeamIdsForEmployee(req.user.employeeId)
+    teamIds: scope === "own" ? [] : await taskModel.findTeamIdsForEmployee(req.user.employeeId)
   };
 };
+
+const canAccessTask = async (req, task) => {
+  const visibility = await visibilityFor(req, task.workspaceId);
+  if (!visibility) return true;
+  if (task.assigneeIds.includes(visibility.employeeId)) return true;
+  return Boolean(task.teamId) && visibility.teamIds.includes(task.teamId);
+};
+
+const outsideScope = (res) =>
+  res.status(403).json({ message: "You can only work on tasks assigned to you or your team.", code: "FORBIDDEN" });
+
+const cannotAssign = (res) =>
+  res.status(403).json({ message: "You do not have permission to assign tasks.", code: "FORBIDDEN" });
 
 const filtersFrom = (query) => ({
   search: text(query.search),
@@ -142,8 +158,9 @@ const runScheduledAutomation = async (workspaceId) => {
 };
 
 const loadVisibleTasks = async (req, workspaceId, filters) => {
+  await runRecurringTasks(workspaceId);
   await runScheduledAutomation(workspaceId);
-  const rows = await taskModel.findTasks({ workspaceId, visibility: await visibilityFor(req), filters });
+  const rows = await taskModel.findTasks({ workspaceId, visibility: await visibilityFor(req, workspaceId), filters });
   return withAssignees(rows);
 };
 
@@ -180,6 +197,7 @@ const getTask = async (req, res) => {
   const task = await loadOne(req.params.taskId);
   if (!task) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, task.workspaceId))) return;
+  if (!(await canAccessTask(req, task))) return outsideScope(res);
 
   res.json(task);
 };
@@ -263,7 +281,7 @@ const createTask = async (req, res) => {
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
 
   const sizeKey = changes.sizeKey ?? "M";
-  const assigneeIds = changes.assigneeIds ?? [];
+  const assigneeIds = can(req, "task.assign") ? (changes.assigneeIds ?? []) : [req.user.employeeId];
 
   const taskId = await withTransaction(async (connection) => {
     const id = await nextId("TSK", connection);
@@ -296,6 +314,10 @@ const createTask = async (req, res) => {
         { ...base, action: "assigned", summary: "assigned this task", detail: { to: assigneeIds } },
         connection
       );
+      await notifications.taskAssigned(
+        { task: { id, workspaceId, title: changes.title }, assigneeIds, actorId: req.user.employeeId },
+        connection
+      );
     }
     return id;
   });
@@ -307,6 +329,7 @@ const updateTask = async (req, res) => {
   const existing = await loadOne(req.params.taskId);
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
+  if (!(await canAccessTask(req, existing))) return outsideScope(res);
 
   const { errors, changes } = await validateTaskFields(req.body, existing.workspaceId, existing);
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
@@ -317,6 +340,7 @@ const updateTask = async (req, res) => {
   );
   const assigneesChanged =
     assigneeIds !== undefined && JSON.stringify([...assigneeIds].sort()) !== JSON.stringify([...existing.assigneeIds].sort());
+  if (assigneesChanged && !can(req, "task.assign")) return cannotAssign(res);
 
   await withTransaction(async (connection) => {
     if (changedFields.length > 0) await taskModel.updateTask(existing.id, fieldChanges, connection);
@@ -334,6 +358,11 @@ const updateTask = async (req, res) => {
         { ...base, action: "assigned", summary: "changed the assignees", detail: { to: assigneeIds } },
         connection
       );
+      const added = assigneeIds.filter((id) => !existing.assigneeIds.includes(id));
+      await notifications.taskAssigned(
+        { task: { id: existing.id, workspaceId: existing.workspaceId, title: existing.title }, assigneeIds: added, actorId: req.user.employeeId },
+        connection
+      );
     }
   });
 
@@ -344,6 +373,7 @@ const moveTask = async (req, res) => {
   const existing = await loadOne(req.params.taskId);
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
+  if (!(await canAccessTask(req, existing))) return outsideScope(res);
 
   const statusId = text(req.body.statusId);
   const to = statusId ? await workspaceModel.findColumnById(statusId) : null;
@@ -373,6 +403,16 @@ const moveTask = async (req, res) => {
   await withTransaction(async (connection) => {
     await taskModel.updateTask(existing.id, changes, connection);
     await taskModel.insertHistory(history, connection);
+    await notifications.taskMoved(
+      {
+        task: { id: existing.id, workspaceId: existing.workspaceId, title: existing.title, createdById: existing.createdById },
+        assigneeIds: existing.assigneeIds,
+        actorId: req.user.employeeId,
+        toName: to.name,
+        completed: to.kind === "completed"
+      },
+      connection
+    );
   });
 
   res.json(await loadOne(existing.id));
@@ -382,10 +422,15 @@ const deleteTask = async (req, res) => {
   const existing = await loadOne(req.params.taskId);
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
+  if (!(await canAccessTask(req, existing))) return outsideScope(res);
 
   await withTransaction(async (connection) => {
     await taskModel.insertHistory(
       { taskId: existing.id, workspaceId: existing.workspaceId, actorId: req.user.employeeId, action: "deleted", summary: "deleted this task" },
+      connection
+    );
+    await notifications.taskDeleted(
+      { task: { id: existing.id, workspaceId: existing.workspaceId, title: existing.title }, assigneeIds: existing.assigneeIds, actorId: req.user.employeeId },
       connection
     );
     await taskModel.deleteTask(existing.id, connection);
@@ -398,6 +443,7 @@ const getTaskHistory = async (req, res) => {
   const existing = await loadOne(req.params.taskId);
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
+  if (!(await canAccessTask(req, existing))) return outsideScope(res);
 
   const rows = await taskModel.findHistory(existing.id);
   res.json(

@@ -1,5 +1,6 @@
 const express = require("express");
 const adminController = require("../controllers/admin.controller");
+const accountController = require("../controllers/account.controller");
 const { requireAuth, requirePermission } = require("../middleware/auth.middleware");
 
 const router = express.Router();
@@ -17,6 +18,11 @@ router.post("/user-types", canManageTypes, adminController.createUserType);
 router.post("/user-types/:id/duplicate", canManageTypes, adminController.duplicateUserType);
 router.put("/user-types/:id", canManageTypes, adminController.updateUserType);
 router.delete("/user-types/:id", canManageTypes, adminController.deleteUserType);
+
+router.get("/accounts", canManageTypes, accountController.listAccounts);
+router.post("/accounts", canManageTypes, accountController.createAccount);
+router.put("/accounts/:employeeId", canManageTypes, accountController.updateAccount);
+router.post("/accounts/:employeeId/reset-password", canManageTypes, accountController.resetPassword);
 
 router.get("/features", canManageFeatures, adminController.getFeatures);
 router.put("/features/:key", canManageFeatures, adminController.setFeature);

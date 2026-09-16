@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Badge,
   Box,
@@ -12,14 +12,17 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Bell, Check, ChevronDown, LogOut, Menu as MenuIcon, UserRound } from 'lucide-react'
+import { Bell, BellOff, Check, ChevronDown, KeyRound, LogOut, Menu as MenuIcon, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { SearchField } from '@/components/SearchField'
 import { UserAvatar } from '@/components/UserAvatar'
+import { ChangePasswordDialog } from '@/features/auth/ChangePasswordDialog'
 import { notificationService } from '@/api/notificationService'
-import { ROUTES } from '@/constants/routes'
+import { ROUTES, workspaceViewPath } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
 import { useSession } from '@/hooks/useSession'
+import { usePermissions } from '@/hooks/usePermissions'
+import { PERMISSIONS } from '@/constants/permissions'
 import { colors, layout } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
@@ -27,13 +30,43 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 export const Header = ({ onOpenSidebar }) => {
   const navigate = useNavigate()
   const { user, role, roles, switchRole, logout } = useSession()
-  const { data: notifications } = useAsync(notificationService.listNotifications, [])
+  const { can } = usePermissions()
+  const inbox = useAsync(notificationService.listNotifications, [])
+  const notifications = inbox.data?.items ?? []
 
   const [search, setSearch] = useState('')
   const [notificationAnchor, setNotificationAnchor] = useState(null)
   const [profileAnchor, setProfileAnchor] = useState(null)
+  const [passwordOpen, setPasswordOpen] = useState(false)
 
-  const unreadCount = notifications?.filter((notification) => notification.unread).length ?? 0
+  const unreadCount = inbox.data?.unreadCount ?? 0
+
+  useEffect(() => {
+    const timer = setInterval(() => inbox.reload(), 60000)
+    return () => clearInterval(timer)
+  }, [inbox])
+
+  const openNotification = async (notification) => {
+    setNotificationAnchor(null)
+    if (notification.unread) {
+      try {
+        await notificationService.markRead(notification.id)
+      } catch {
+        // ignore
+      }
+      inbox.reload()
+    }
+    if (notification.workspaceId) navigate(workspaceViewPath())
+  }
+
+  const markAllRead = async () => {
+    try {
+      await notificationService.markAllRead()
+    } catch {
+      // ignore
+    }
+    inbox.reload()
+  }
 
   const submitSearch = (event) => {
     event.preventDefault()
@@ -72,15 +105,19 @@ export const Header = ({ onOpenSidebar }) => {
 
       <WorkspaceSwitcher />
 
-      <Box component="form" onSubmit={submitSearch} sx={{ flex: 1, maxWidth: 420, minWidth: 0 }}>
-        <SearchField
-          value={search}
-          onChange={setSearch}
-          label="Search employees"
-          placeholder="Search employees…"
-          fullWidth
-        />
-      </Box>
+      {can(PERMISSIONS.EMPLOYEE_VIEW) ? (
+        <Box component="form" onSubmit={submitSearch} sx={{ flex: 1, maxWidth: 420, minWidth: 0 }}>
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            label="Search employees"
+            placeholder="Search employees…"
+            fullWidth
+          />
+        </Box>
+      ) : (
+        <Box sx={{ flex: 1 }} />
+      )}
 
       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
         <Tooltip title="Notifications">
@@ -139,15 +176,32 @@ export const Header = ({ onOpenSidebar }) => {
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
         slotProps={{ paper: { sx: { width: 340, maxWidth: '90vw' } } }}
       >
-        <Typography variant="h4" sx={{ px: 2, py: 1.5 }}>
-          Notifications
-        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.25 }}>
+          <Typography variant="h4">Notifications</Typography>
+          {unreadCount > 0 ? (
+            <Typography
+              component="button"
+              type="button"
+              variant="caption"
+              onClick={markAllRead}
+              sx={{ border: 0, bgcolor: 'transparent', color: colors.brand, cursor: 'pointer', fontWeight: 600, p: 0 }}
+            >
+              Mark all as read
+            </Typography>
+          ) : null}
+        </Stack>
         <Divider />
-        {(notifications ?? []).map((notification) => (
+        {notifications.length === 0 ? (
+          <Stack spacing={0.75} sx={{ alignItems: 'center', px: 2, py: 3, color: colors.textSecondary }}>
+            <BellOff size={22} strokeWidth={1.5} aria-hidden="true" />
+            <Typography variant="body2">You're all caught up</Typography>
+          </Stack>
+        ) : null}
+        {notifications.map((notification) => (
           <MenuItem
             key={notification.id}
-            onClick={() => setNotificationAnchor(null)}
-            sx={{ alignItems: 'flex-start', py: 1.25, whiteSpace: 'normal' }}
+            onClick={() => openNotification(notification)}
+            sx={{ alignItems: 'flex-start', py: 1.25, whiteSpace: 'normal', bgcolor: notification.unread ? colors.brandSoft : 'transparent' }}
           >
             <Box
               aria-hidden="true"
@@ -219,6 +273,18 @@ export const Header = ({ onOpenSidebar }) => {
         )}
         <MenuItem
           sx={{ py: 1.25 }}
+          onClick={() => {
+            setProfileAnchor(null)
+            setPasswordOpen(true)
+          }}
+        >
+          <ListItemIcon>
+            <KeyRound size={16} strokeWidth={1.75} aria-hidden="true" />
+          </ListItemIcon>
+          <ListItemText primary="Change password" slotProps={{ primary: { fontSize: '0.8125rem' } }} />
+        </MenuItem>
+        <MenuItem
+          sx={{ py: 1.25 }}
           onClick={async () => {
             setProfileAnchor(null)
             await logout()
@@ -231,6 +297,7 @@ export const Header = ({ onOpenSidebar }) => {
           <ListItemText primary="Sign out" slotProps={{ primary: { fontSize: '0.8125rem' } }} />
         </MenuItem>
       </Menu>
+      <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </Box>
   )
 }
