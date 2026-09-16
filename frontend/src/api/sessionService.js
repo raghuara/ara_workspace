@@ -1,24 +1,23 @@
-import { ROLE_DEFINITIONS } from '@/mock/session'
-import { getActiveRole, setActiveRole } from './mockDb'
-import { mockRequest } from './httpClient'
-
-const toSession = (role) => ({
-  user: role.user,
-  role: { id: role.id, name: role.name, description: role.description },
-  permissions: role.permissions,
-})
+import { ApiError, apiRequest, getToken } from './httpClient'
 
 export const sessionService = {
-  getSession: () => mockRequest(() => toSession(getActiveRole())),
+  /**
+   * GET /api/auth/me — resolves the stored token back into the full session
+   * (user, userType, permissions, features). A missing token short-circuits to
+   * the same 401 the backend would return, without a network round-trip.
+   */
+  getSession: async () => {
+    if (!getToken()) {
+      throw new ApiError(401, 'You must be logged in.', 'UNAUTHORIZED')
+    }
+    return apiRequest('/auth/me')
+  },
 
-  listRoles: () =>
-    mockRequest(() =>
-      ROLE_DEFINITIONS.map((role) => ({
-        id: role.id,
-        name: role.name,
-        description: role.description,
-      })),
-    ),
+  // Role switching was a mock-only development aid. With real accounts each
+  // login is one role, so the switcher has nothing to list.
+  listRoles: async () => [],
 
-  switchRole: (roleId) => mockRequest(() => toSession(setActiveRole(roleId))),
+  switchRole: async () => {
+    throw new ApiError(400, 'Sign in with a different account to change role.', 'NOT_SUPPORTED')
+  },
 }

@@ -12,7 +12,7 @@ export const SalaryTimeline = ({ entries }) => (
 
       return (
         <Box component="li" key={entry.id} sx={{ display: 'flex', gap: 2 }}>
-          <Stack alignItems="center" sx={{ flexShrink: 0 }}>
+          <Stack sx={{ alignItems: 'center', flexShrink: 0 }}>
             <Box
               aria-hidden="true"
               sx={{
@@ -30,9 +30,8 @@ export const SalaryTimeline = ({ entries }) => (
           <Box sx={{ pb: isLast ? 0 : 3, minWidth: 0, flex: 1 }}>
             <Stack
               direction={{ xs: 'column', sm: 'row' }}
-              justifyContent="space-between"
               spacing={0.5}
-              sx={{ mb: 0.75 }}
+              sx={{ justifyContent: 'space-between', mb: 0.75 }}
             >
               <Typography variant="body2" fontWeight={600}>
                 {entry.reason}
@@ -40,7 +39,7 @@ export const SalaryTimeline = ({ entries }) => (
               <Typography variant="caption">Effective {formatDate(entry.effectiveDate)}</Typography>
             </Stack>
 
-            <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap">
+            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
               <Typography variant="body2" color="text.secondary">
                 {formatCurrency(entry.previousSalary)}
               </Typography>

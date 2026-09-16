@@ -9,7 +9,7 @@ export const EmptyState = ({
   actionLabel,
   onAction,
 }) => (
-  <Stack spacing={1.5} alignItems="center" sx={{ py: 7, px: 3, textAlign: 'center' }}>
+  <Stack spacing={1.5} sx={{ alignItems: 'center', py: 7, px: 3, textAlign: 'center' }}>
     <Box
       sx={{
         width: 48,

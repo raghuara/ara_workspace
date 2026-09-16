@@ -1,34 +1,34 @@
 import { useState } from 'react'
-import { Box, Card, Divider, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material'
-import { Mail, Phone } from 'lucide-react'
+import { Box, Button, Card, Divider, Skeleton, Stack, Tab, Tabs, Typography } from '@mui/material'
+import { Mail, Pencil, Phone } from 'lucide-react'
 import { useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import { QueryStateView } from '@/components/QueryStateView'
 import { StatusChip } from '@/components/StatusChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { employeeService } from '@/api/employeeService'
+import { PERMISSIONS } from '@/constants/permissions'
 import { ROUTES } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
+import { usePermissions } from '@/hooks/usePermissions'
 import { colors } from '@/theme/tokens'
+import { EmployeeFormDialog } from './EmployeeFormDialog'
 import { OverviewTab } from './tabs/OverviewTab'
-import { PersonalInformationTab } from './tabs/PersonalInformationTab'
 import { EmploymentTab } from './tabs/EmploymentTab'
-import { DocumentsTab } from './tabs/DocumentsTab'
 import { PerformanceTab } from './tabs/PerformanceTab'
-import { RecruitmentHistoryTab } from './tabs/RecruitmentHistoryTab'
 
 const TABS = [
   { value: 'overview', label: 'Overview' },
-  { value: 'personal', label: 'Personal Information' },
   { value: 'employment', label: 'Employment' },
-  { value: 'documents', label: 'Documents' },
   { value: 'performance', label: 'Performance' },
-  { value: 'recruitment', label: 'Recruitment History' },
 ]
 
 export const EmployeeDetailPage = () => {
   const { employeeId } = useParams()
   const [activeTab, setActiveTab] = useState('overview')
+  const [editOpen, setEditOpen] = useState(false)
+  const { can } = usePermissions()
+  const canEdit = can(PERMISSIONS.EMPLOYEE_UPDATE)
 
   const { data: employee, loading, error, reload, setData } = useAsync(
     employeeService.getEmployee,
@@ -43,15 +43,35 @@ export const EmployeeDetailPage = () => {
           { label: 'Employees', to: ROUTES.employees },
           { label: employee?.fullName ?? 'Loading…' },
         ]}
+        actions={
+          canEdit && employee ? (
+            <Button
+              variant="outlined"
+              startIcon={<Pencil size={15} strokeWidth={1.75} aria-hidden="true" />}
+              onClick={() => setEditOpen(true)}
+            >
+              Edit
+            </Button>
+          ) : null
+        }
+      />
+
+      <EmployeeFormDialog
+        open={editOpen}
+        employee={employee}
+        onClose={() => setEditOpen(false)}
+        onSaved={(updated) => {
+          setEditOpen(false)
+          setData(updated)
+        }}
       />
 
       <QueryStateView error={error} onRetry={reload}>
-        <Card sx={{ mb: 2.5 }}>
+        <Card sx={{ mb: 2 }}>
           <Stack
             direction={{ xs: 'column', sm: 'row' }}
-            spacing={2.5}
-            alignItems={{ xs: 'flex-start', sm: 'center' }}
-            sx={{ p: 2.5 }}
+            spacing={2}
+            sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, p: 2 }}
           >
             {loading ? (
               <Skeleton variant="circular" width={64} height={64} />
@@ -67,7 +87,7 @@ export const EmployeeDetailPage = () => {
                 </>
               ) : (
                 <>
-                  <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                  <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                     <Typography variant="h2" component="p">
                       {employee?.fullName}
                     </Typography>
@@ -76,14 +96,14 @@ export const EmployeeDetailPage = () => {
                   <Typography variant="body2" color="text.secondary" sx={{ mt: 0.25 }}>
                     {employee?.designation} · {employee?.department} · {employee?.employeeId}
                   </Typography>
-                  <Stack direction="row" spacing={2.5} flexWrap="wrap" sx={{ mt: 1.25 }}>
-                    <Stack direction="row" spacing={0.75} alignItems="center">
+                  <Stack direction="row" spacing={2} sx={{ flexWrap: 'wrap', mt: 1.25 }}>
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                       <Mail size={14} strokeWidth={1.75} color={colors.textSecondary} aria-hidden="true" />
                       <Typography variant="body2" color="text.secondary">
                         {employee?.email}
                       </Typography>
                     </Stack>
-                    <Stack direction="row" spacing={0.75} alignItems="center">
+                    <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
                       <Phone size={14} strokeWidth={1.75} color={colors.textSecondary} aria-hidden="true" />
                       <Typography variant="body2" color="text.secondary">
                         {employee?.phone}
@@ -111,19 +131,14 @@ export const EmployeeDetailPage = () => {
         </Card>
 
         {loading || !employee ? (
-          <Card sx={{ p: 2.5 }}>
+          <Card sx={{ p: 2 }}>
             <Skeleton variant="rounded" height={220} />
           </Card>
         ) : (
           <Box role="tabpanel">
             {activeTab === 'overview' ? <OverviewTab employee={employee} /> : null}
-            {activeTab === 'personal' ? (
-              <PersonalInformationTab employee={employee} onSaved={setData} />
-            ) : null}
             {activeTab === 'employment' ? <EmploymentTab employee={employee} /> : null}
-            {activeTab === 'documents' ? <DocumentsTab employeeId={employee.id} /> : null}
             {activeTab === 'performance' ? <PerformanceTab employeeId={employee.id} /> : null}
-            {activeTab === 'recruitment' ? <RecruitmentHistoryTab employeeId={employee.id} /> : null}
           </Box>
         )}
       </QueryStateView>

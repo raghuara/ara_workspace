@@ -19,7 +19,7 @@ export const ConfirmDialog = ({
   children,
 }) => (
   <Dialog open={open} onClose={confirming ? undefined : onClose} maxWidth="sm" fullWidth>
-    <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 600 }}>{title}</DialogTitle>
+    <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>{title}</DialogTitle>
     <DialogContent>
       {description ? <DialogContentText variant="body2">{description}</DialogContentText> : null}
       {children}

@@ -6,7 +6,7 @@ export const DefinitionList = ({ items, columns = { xs: 1, sm: 2, lg: 3 } }) => 
     sx={{
       m: 0,
       display: 'grid',
-      gap: 2.5,
+      gap: 2,
       gridTemplateColumns: {
         xs: `repeat(${columns.xs ?? 1}, minmax(0, 1fr))`,
         sm: `repeat(${columns.sm ?? 2}, minmax(0, 1fr))`,

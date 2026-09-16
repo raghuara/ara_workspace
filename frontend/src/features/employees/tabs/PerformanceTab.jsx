@@ -36,7 +36,7 @@ export const PerformanceTab = ({ employeeId }) => {
     <SectionCard title="Performance" description="Review history for this employee" padded={false}>
       <QueryStateView error={error} onRetry={reload}>
         {loading ? (
-          <Box sx={{ p: 2.5 }}>
+          <Box sx={{ p: 2 }}>
             <LinearProgress aria-label="Loading performance reviews" />
           </Box>
         ) : data?.length ? (
@@ -44,13 +44,17 @@ export const PerformanceTab = ({ employeeId }) => {
             <Box
               key={review.id}
               sx={{
-                px: 2.5,
-                py: 2,
+                px: 2,
+                py: 1.5,
                 borderBottom: `1px solid ${colors.border}`,
                 '&:last-of-type': { borderBottom: 0 },
               }}
             >
-              <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+              <Stack
+                direction="row"
+                spacing={2}
+                sx={{ justifyContent: 'space-between', alignItems: 'center' }}
+              >
                 <Box sx={{ minWidth: 0 }}>
                   <Typography variant="body2" fontWeight={600}>
                     {review.reviewPeriod}
@@ -59,7 +63,7 @@ export const PerformanceTab = ({ employeeId }) => {
                     Reviewer {review.reviewerName} · Updated {formatDate(review.updatedOn)}
                   </Typography>
                 </Box>
-                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ flexShrink: 0 }}>
+                <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', flexShrink: 0 }}>
                   <Typography variant="body2" fontWeight={600}>
                     {review.overallRating.toFixed(1)}
                     <Typography component="span" variant="caption">

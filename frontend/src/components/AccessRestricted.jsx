@@ -12,7 +12,7 @@ export const AccessRestricted = ({
 
   return (
     <Card sx={{ p: { xs: 3, md: 6 } }}>
-      <Stack spacing={2} alignItems="center" sx={{ textAlign: 'center' }} role="alert">
+      <Stack spacing={2} sx={{ alignItems: 'center', textAlign: 'center' }} role="alert">
         <Box
           sx={{
             width: 52,

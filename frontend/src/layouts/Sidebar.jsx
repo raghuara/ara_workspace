@@ -2,43 +2,42 @@ import { Box, List, ListItemButton, ListItemIcon, ListItemText, Stack, Tooltip, 
 import { Lock } from 'lucide-react'
 import { Link, useLocation } from 'react-router-dom'
 import { NAVIGATION } from '@/constants/navigation'
+import { ROUTES } from '@/constants/routes'
+import logoUrl from '@/assets/logo.png'
+import { WorkspaceNavTree } from './WorkspaceNavTree'
+import { navRowSx, sectionLabelSx, sectionSx } from './navRowSx'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useFeatures } from '@/hooks/useFeatures'
 import { colors, layout } from '@/theme/tokens'
 
 const isPathActive = (pathname, to, end) =>
   end ? pathname === to : pathname === to || pathname.startsWith(`${to}/`)
 
-const NavItem = ({ item, nested, active, onNavigate }) => (
+const NavItem = ({ item, active, onNavigate }) => (
   <ListItemButton
     component={Link}
     to={item.to}
     onClick={onNavigate}
     aria-current={active ? 'page' : undefined}
-    sx={{
-      borderRadius: 2,
-      minHeight: 40,
-      pl: nested ? 2 : 1.25,
-      pr: 1.25,
-      color: active ? colors.brandDark : colors.textSecondary,
-      bgcolor: active ? colors.brandSoft : 'transparent',
-      '&:hover': { bgcolor: active ? colors.brandSoft : colors.neutralSoft },
-    }}
+    sx={navRowSx(active)}
   >
     <ListItemIcon>
-      <item.icon size={nested ? 16 : 18} strokeWidth={1.75} aria-hidden="true" />
+      <item.icon size={18} strokeWidth={active ? 2 : 1.75} aria-hidden="true" />
     </ListItemIcon>
     <ListItemText
       primary={item.label}
-      slotProps={{ primary: { fontSize: '0.875rem', fontWeight: active ? 600 : 500 } }}
+      slotProps={{ primary: { fontSize: '0.8125rem', fontWeight: active ? 600 : 500, noWrap: true } }}
     />
   </ListItemButton>
 )
 
 export const Sidebar = ({ onNavigate }) => {
   const { can } = usePermissions()
+  const { isEnabled } = useFeatures()
   const { pathname } = useLocation()
 
-  const isVisible = (item) => !item.permission || can(item.permission)
+  const isVisible = (item) =>
+    (!item.permission || can(item.permission)) && (!item.feature || isEnabled(item.feature))
 
   return (
     <Box
@@ -53,46 +52,54 @@ export const Sidebar = ({ onNavigate }) => {
         flexDirection: 'column',
       }}
     >
-      <Stack
-        direction="row"
-        alignItems="center"
-        spacing={1.25}
+      <Box
+        component={Link}
+        to={ROUTES.dashboard}
+        aria-label="ARA Workspace — go to dashboard"
         sx={{
+          display: 'flex',
+          alignItems: 'center',
           height: layout.headerHeight,
           px: 2.5,
-          borderBottom: `1px solid ${colors.border}`,
           flexShrink: 0,
+          borderBottom: `1px solid ${colors.border}`,
         }}
       >
         <Box
-          aria-hidden="true"
-          sx={{
-            width: 32,
-            height: 32,
-            borderRadius: 1.75,
-            bgcolor: colors.brand,
-            color: '#fff',
-            display: 'grid',
-            placeItems: 'center',
-            fontWeight: 700,
-            fontSize: '0.875rem',
-          }}
-        >
-          A
-        </Box>
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="h4" noWrap>
-            ARA Workspace
-          </Typography>
-          <Typography variant="caption" component="p" noWrap>
-            Employee &amp; Operations
-          </Typography>
-        </Box>
-      </Stack>
+          component="img"
+          src={logoUrl}
+          alt="ARA Workspace"
+          sx={{ height: 30, width: 'auto', display: 'block' }}
+        />
+      </Box>
 
-      <Box sx={{ flex: 1, overflowY: 'auto', px: 1.5, py: 2 }}>
-        <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
-          {NAVIGATION.map((item) => {
+      <Box
+        sx={{
+          flex: 1,
+          overflowY: 'auto',
+          px: 2.5,
+          py: 2,
+          scrollbarWidth: 'thin',
+          scrollbarColor: `${colors.border} transparent`,
+        }}
+      >
+        <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+          {NAVIGATION.filter((item) => item.key === 'dashboard')
+            .filter(isVisible)
+            .map((item) => (
+              <NavItem
+                key={item.key}
+                item={item}
+                active={isPathActive(pathname, item.to, item.end)}
+                onNavigate={onNavigate}
+              />
+            ))}
+
+          <WorkspaceNavTree onNavigate={onNavigate} />
+
+          {NAVIGATION.filter((item) => item.key !== 'dashboard').map((item) => {
+            if (item.feature && !isEnabled(item.feature)) return null
+
             if (!item.children) {
               if (!isVisible(item)) return null
               return (
@@ -109,30 +116,24 @@ export const Sidebar = ({ onNavigate }) => {
             if (visibleChildren.length === 0) return null
 
             return (
-              <Box key={item.key} component="section" sx={{ mt: 1.5 }}>
-                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ px: 1.25, mb: 0.5 }}>
-                  <item.icon size={14} strokeWidth={1.75} color={colors.textSecondary} aria-hidden="true" />
-                  <Typography
-                    variant="subtitle2"
-                    component="h2"
-                    sx={{ flex: 1, fontSize: '0.6875rem', letterSpacing: '0.06em', textTransform: 'uppercase' }}
-                  >
+              <Box key={item.key} component="section" sx={sectionSx}>
+                <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', ...sectionLabelSx }}>
+                  <Typography component="h2" sx={{ flex: 1, font: 'inherit', letterSpacing: 'inherit' }}>
                     {item.label}
                   </Typography>
                   {item.restricted ? (
                     <Tooltip title="Restricted module">
-                      <Box sx={{ display: 'flex', color: colors.textSecondary }}>
-                        <Lock size={13} strokeWidth={1.75} aria-label="Restricted module" />
+                      <Box sx={{ display: 'flex' }}>
+                        <Lock size={12} strokeWidth={1.75} aria-label="Restricted module" />
                       </Box>
                     </Tooltip>
                   ) : null}
                 </Stack>
-                <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.25 }}>
+                <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                   {visibleChildren.map((child) => (
                     <NavItem
                       key={child.key}
                       item={child}
-                      nested
                       active={isPathActive(pathname, child.to, child.end)}
                       onNavigate={onNavigate}
                     />

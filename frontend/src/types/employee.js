@@ -20,31 +20,9 @@
  * @property {string|null} reportingManagerId
  * @property {string|null} reportingManager
  * @property {string|null} avatarUrl
- * @property {PersonalInformation} personalInformation
  */
 
-/**
- * @typedef {Object} PersonalInformation
- * @property {string} dateOfBirth ISO date
- * @property {string} gender
- * @property {string} maritalStatus
- * @property {string} nationality
- * @property {string} nationalId
- * @property {string} personalEmail
- * @property {string} addressLine1
- * @property {string} addressLine2
- * @property {string} city
- * @property {string} postalCode
- * @property {string} country
- * @property {EmergencyContact} emergencyContact
- */
 
-/**
- * @typedef {Object} EmergencyContact
- * @property {string} name
- * @property {string} relationship
- * @property {string} phone
- */
 
 /**
  * @typedef {Object} EmployeeDocument

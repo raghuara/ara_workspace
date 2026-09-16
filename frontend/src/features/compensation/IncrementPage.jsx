@@ -145,7 +145,7 @@ export const IncrementPage = () => {
 
       <RestrictedBanner />
 
-      <Card sx={{ p: { xs: 2, md: 3 }, mb: 2.5 }}>
+      <Card sx={{ p: { xs: 2, md: 3 }, mb: 2 }}>
         <Stepper activeStep={Math.min(activeStep, STEPS.length - 1)} alternativeLabel>
           {STEPS.map((label) => (
             <Step key={label}>
@@ -157,7 +157,7 @@ export const IncrementPage = () => {
 
       {activeStep === 4 && savedEntry ? (
         <SectionCard title="Increment saved">
-          <Stack spacing={2.5}>
+          <Stack spacing={2}>
             <Alert
               icon={<CircleCheck size={18} strokeWidth={1.75} />}
               severity="success"
@@ -219,7 +219,7 @@ export const IncrementPage = () => {
               }}
               sx={{ maxWidth: 520 }}
             />
-            <Stack direction="row" justifyContent="flex-end" sx={{ mt: 3 }}>
+            <Stack direction="row" sx={{ justifyContent: 'flex-end', mt: 3 }}>
               <Button
                 variant="contained"
                 disabled={!selectedEmployee}
@@ -245,7 +245,7 @@ export const IncrementPage = () => {
               <DefinitionList items={currentDetails} />
             )}
             <Divider sx={{ my: 3 }} />
-            <Stack direction="row" justifyContent="space-between">
+            <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
               <Button
                 variant="outlined"
                 onClick={() => setActiveStep(0)}
@@ -333,7 +333,7 @@ export const IncrementPage = () => {
           />
 
           <Divider sx={{ my: 3 }} />
-          <Stack direction="row" justifyContent="space-between">
+          <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Button
               variant="outlined"
               onClick={() => setActiveStep(1)}
@@ -358,7 +358,7 @@ export const IncrementPage = () => {
           description="Check the figures carefully — this will be recorded in salary history"
         >
           {submitError ? (
-            <Alert severity="error" sx={{ mb: 2.5 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {isForbidden(submitError)
                 ? 'You do not have permission to apply increments.'
                 : (submitError.message ?? 'The increment could not be saved.')}
@@ -370,7 +370,7 @@ export const IncrementPage = () => {
               display: 'grid',
               gap: 2,
               gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
-              mb: 3,
+              mb: 2.5,
             }}
           >
             {[
@@ -382,7 +382,7 @@ export const IncrementPage = () => {
                 <Typography variant="subtitle2" component="p">
                   {item.label}
                 </Typography>
-                <Typography variant="h2" component="p" sx={{ mt: 0.5, fontSize: '1.375rem' }}>
+                <Typography variant="h2" component="p" sx={{ mt: 0.5, fontSize: '1.25rem' }}>
                   {item.value}
                 </Typography>
               </Box>
@@ -402,7 +402,7 @@ export const IncrementPage = () => {
           />
 
           <Divider sx={{ my: 3 }} />
-          <Stack direction="row" justifyContent="space-between">
+          <Stack direction="row" sx={{ justifyContent: 'space-between' }}>
             <Button
               variant="outlined"
               onClick={() => setActiveStep(2)}

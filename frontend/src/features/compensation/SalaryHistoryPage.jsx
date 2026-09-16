@@ -86,12 +86,11 @@ export const SalaryHistoryPage = () => {
 
       <RestrictedBanner />
 
-      <Card sx={{ mb: 2.5 }}>
+      <Card sx={{ mb: 2 }}>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', md: 'center' }}
-          sx={{ p: 2.5 }}
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, p: 2 }}
         >
           <SearchField
             value={search}
@@ -157,7 +156,7 @@ export const SalaryHistoryPage = () => {
                     {data?.items?.map((entry) => (
                       <TableRow key={entry.id} hover>
                         <TableCell>
-                          <Stack direction="row" spacing={1.5} alignItems="center">
+                          <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                             <UserAvatar name={entry.employee.fullName} size={34} />
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="body2" fontWeight={600} noWrap>

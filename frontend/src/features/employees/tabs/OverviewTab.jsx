@@ -14,7 +14,7 @@ export const OverviewTab = ({ employee }) => {
   const reports = useAsync(employeeService.getDirectReports, [employee.id])
 
   return (
-    <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' } }}>
+    <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '1.4fr 1fr' } }}>
       <SectionCard title="Overview" description="Key details for this employee">
         <DefinitionList
           columns={{ xs: 1, sm: 2, lg: 2 }}
@@ -43,13 +43,10 @@ export const OverviewTab = ({ employee }) => {
                 key={report.id}
                 direction="row"
                 spacing={1.5}
-                alignItems="center"
-                sx={{
-                  px: 2.5,
-                  py: 1.75,
+                sx={{ alignItems: 'center', px: 2,
+                  py: 1.5,
                   borderBottom: `1px solid ${colors.border}`,
-                  '&:last-of-type': { borderBottom: 0 },
-                }}
+                  '&:last-of-type': { borderBottom: 0 }, }}
               >
                 <UserAvatar name={report.fullName} size={32} />
                 <Box sx={{ flex: 1, minWidth: 0 }}>

@@ -1,8 +1,7 @@
-import { mockDocuments, mockEmployees } from '@/mock/employees'
+import { mockEmployees } from '@/mock/employees'
 import { buildMockInterviewReviews, buildMockInterviews } from '@/mock/recruitment'
 import { buildMockPerformanceReviews } from '@/mock/performance'
 import { buildMockCompensation, buildMockSalaryHistory } from '@/mock/compensation'
-import { DEFAULT_ROLE_ID, findRole } from '@/mock/session'
 
 const employees = mockEmployees.map((employee) => ({ ...employee }))
 const employeeNameById = new Map(employees.map((employee) => [employee.id, employee.fullName]))
@@ -15,9 +14,10 @@ const performanceReviews = buildMockPerformanceReviews(employees)
 const compensation = buildMockCompensation(employees)
 const salaryHistory = buildMockSalaryHistory(compensation, employees)
 
+let currentUser = { id: null, name: 'Current user' }
+
 export const db = {
   employees,
-  documents: mockDocuments.map((document) => ({ ...document })),
   interviews,
   interviewReviews,
   performanceReviews,
@@ -25,14 +25,11 @@ export const db = {
   salaryHistory,
 }
 
-let activeRoleId = DEFAULT_ROLE_ID
-
-export const getActiveRole = () => findRole(activeRoleId)
-
-export const setActiveRole = (roleId) => {
-  activeRoleId = findRole(roleId).id
-  return getActiveRole()
+export const syncMockIdentity = (session) => {
+  if (session?.user) currentUser = { id: session.user.id, name: session.user.name }
 }
 
-export const nextId = (prefix, collection) =>
-  `${prefix}-${String(collection.length + 1).padStart(4, '0')}`
+export const getCurrentUser = () => currentUser
+
+export const nextId = (prefix, collection, width = 4) =>
+  `${prefix}-${String(collection.length + 1).padStart(width, '0')}`

@@ -18,8 +18,8 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Eye, RotateCcw, Users } from 'lucide-react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { Eye, Plus, RotateCcw, Users } from 'lucide-react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import { SearchField } from '@/components/SearchField'
 import { StatusChip } from '@/components/StatusChip'
@@ -27,11 +27,15 @@ import { UserAvatar } from '@/components/UserAvatar'
 import { EmptyState } from '@/components/EmptyState'
 import { QueryStateView } from '@/components/QueryStateView'
 import { TableSkeleton } from '@/components/TableSkeleton'
+import { departmentService } from '@/api/departmentService'
 import { employeeService } from '@/api/employeeService'
-import { DEPARTMENTS, EMPLOYMENT_STATUS } from '@/constants/domain'
+import { EMPLOYMENT_STATUS } from '@/constants/domain'
+import { PERMISSIONS } from '@/constants/permissions'
 import { employeeDetailPath } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { usePermissions } from '@/hooks/usePermissions'
+import { EmployeeFormDialog } from './EmployeeFormDialog'
 import { formatDate } from '@/utils/date'
 import { pluralize } from '@/utils/format'
 
@@ -39,6 +43,10 @@ const STATUS_OPTIONS = Object.values(EMPLOYMENT_STATUS)
 
 export const EmployeeListPage = () => {
   const [searchParams, setSearchParams] = useSearchParams()
+  const navigate = useNavigate()
+  const { can } = usePermissions()
+  const canOnboard = can(PERMISSIONS.EMPLOYEE_UPDATE)
+  const [formOpen, setFormOpen] = useState(false)
 
   const [department, setDepartment] = useState('')
   const [status, setStatus] = useState('')
@@ -65,6 +73,7 @@ export const EmployeeListPage = () => {
   )
 
   const { data, loading, error, reload } = useAsync(employeeService.listEmployees, [query])
+  const { data: departments } = useAsync(departmentService.listDepartments, [])
 
   const hasFilters = Boolean(search || department || status)
 
@@ -81,14 +90,33 @@ export const EmployeeListPage = () => {
         title="Employees"
         description="Browse the employee directory, filter by department or status, and open a profile for full details."
         breadcrumbs={[{ label: 'Employees' }]}
+        actions={
+          canOnboard ? (
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} strokeWidth={2} aria-hidden="true" />}
+              onClick={() => setFormOpen(true)}
+            >
+              Onboard employee
+            </Button>
+          ) : null
+        }
+      />
+
+      <EmployeeFormDialog
+        open={formOpen}
+        onClose={() => setFormOpen(false)}
+        onSaved={(created) => {
+          setFormOpen(false)
+          navigate(employeeDetailPath(created.id))
+        }}
       />
 
       <Card>
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', md: 'center' }}
-          sx={{ p: 2.5 }}
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, p: 2 }}
         >
           <SearchField
             value={search}
@@ -105,9 +133,9 @@ export const EmployeeListPage = () => {
             sx={{ minWidth: { md: 180 } }}
           >
             <MenuItem value="">All departments</MenuItem>
-            {DEPARTMENTS.map((option) => (
-              <MenuItem key={option} value={option}>
-                {option}
+            {(departments ?? []).map((option) => (
+              <MenuItem key={option.id} value={option.name}>
+                {option.name}
               </MenuItem>
             ))}
           </TextField>
@@ -162,7 +190,7 @@ export const EmployeeListPage = () => {
                   {data?.items?.map((employee) => (
                     <TableRow key={employee.id} hover>
                       <TableCell>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                           <UserAvatar name={employee.fullName} src={employee.avatarUrl} />
                           <Box sx={{ minWidth: 0 }}>
                             <Typography variant="body2" fontWeight={600} noWrap>

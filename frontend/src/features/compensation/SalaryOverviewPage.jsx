@@ -74,18 +74,20 @@ export const SalaryOverviewPage = () => {
       <Box
         sx={{
           display: 'grid',
-          gap: 2.5,
+          gap: 2,
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
-          mb: 2.5,
+          mb: 2,
         }}
       >
         <StatCard
+          tone="blue"
           label="Employees on payroll"
           value={formatNumber(summary.data?.employeesOnPayroll)}
           icon={Users}
           loading={summary.loading}
         />
         <StatCard
+          tone="teal"
           label="Monthly payroll"
           value={formatCurrency(summary.data?.monthlyPayroll)}
           helperText="Total gross per month"
@@ -93,12 +95,14 @@ export const SalaryOverviewPage = () => {
           loading={summary.loading}
         />
         <StatCard
+          tone="violet"
           label="Average gross salary"
           value={formatCurrency(summary.data?.averageGrossSalary)}
           icon={Banknote}
           loading={summary.loading}
         />
         <StatCard
+          tone="amber"
           label="Increments this year"
           value={formatNumber(summary.data?.incrementsThisYear)}
           icon={TrendingUp}
@@ -110,8 +114,7 @@ export const SalaryOverviewPage = () => {
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', md: 'center' }}
-          sx={{ p: 2.5 }}
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, p: 2 }}
         >
           <SearchField
             value={search}
@@ -159,7 +162,7 @@ export const SalaryOverviewPage = () => {
                   {data?.items?.map((row) => (
                     <TableRow key={row.employeeId} hover>
                       <TableCell>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                           <UserAvatar name={row.employee.fullName} size={34} />
                           <Box sx={{ minWidth: 0 }}>
                             <Typography variant="body2" fontWeight={600} noWrap>

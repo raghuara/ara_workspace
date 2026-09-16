@@ -22,10 +22,11 @@ import { useAsync } from '@/hooks/useAsync'
 import { useSession } from '@/hooks/useSession'
 import { colors, layout } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
+import { WorkspaceSwitcher } from './WorkspaceSwitcher'
 
 export const Header = ({ onOpenSidebar }) => {
   const navigate = useNavigate()
-  const { user, role, roles, switchRole } = useSession()
+  const { user, role, roles, switchRole, logout } = useSession()
   const { data: notifications } = useAsync(notificationService.listNotifications, [])
 
   const [search, setSearch] = useState('')
@@ -57,19 +58,21 @@ export const Header = ({ onOpenSidebar }) => {
         borderBottom: `1px solid ${colors.border}`,
         display: 'flex',
         alignItems: 'center',
-        gap: 2,
-        px: { xs: 2, md: 3 },
+        gap: { xs: 1, md: 2 },
+        px: { xs: 1.5, sm: 2, md: 3 },
       }}
     >
       <IconButton
         onClick={onOpenSidebar}
         aria-label="Open navigation"
-        sx={{ display: { lg: 'none' } }}
+        sx={{ display: { lg: 'none' }, ml: -0.5 }}
       >
         <MenuIcon size={20} strokeWidth={1.75} />
       </IconButton>
 
-      <Box component="form" onSubmit={submitSearch} sx={{ flex: 1, maxWidth: 420 }}>
+      <WorkspaceSwitcher />
+
+      <Box component="form" onSubmit={submitSearch} sx={{ flex: 1, maxWidth: 420, minWidth: 0 }}>
         <SearchField
           value={search}
           onChange={setSearch}
@@ -79,7 +82,7 @@ export const Header = ({ onOpenSidebar }) => {
         />
       </Box>
 
-      <Stack direction="row" alignItems="center" spacing={0.5} sx={{ ml: 'auto' }}>
+      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
         <Tooltip title="Notifications">
           <IconButton
             onClick={(event) => setNotificationAnchor(event.currentTarget)}
@@ -187,38 +190,45 @@ export const Header = ({ onOpenSidebar }) => {
           </Typography>
         </Box>
         <Divider />
-        <Typography variant="subtitle2" component="p" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
-          Switch role
-        </Typography>
-        {roles.map((option) => (
-          <MenuItem key={option.id} onClick={() => handleRoleChange(option.id)} sx={{ py: 1 }}>
-            <ListItemIcon>
-              {option.id === role?.id ? (
-                <Check size={16} strokeWidth={2} color={colors.brand} aria-hidden="true" />
-              ) : (
-                <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
-              )}
-            </ListItemIcon>
-            <ListItemText
-              primary={option.name}
-              secondary={option.description}
-              slotProps={{
-                primary: { fontSize: '0.875rem', fontWeight: option.id === role?.id ? 600 : 500 },
-                secondary: { fontSize: '0.75rem' },
-              }}
-            />
-          </MenuItem>
-        ))}
-        <Divider />
-        <MenuItem disabled sx={{ py: 1.25 }}>
+        {roles.length > 0 && (
+          <>
+            <Typography variant="subtitle2" component="p" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+              Switch role
+            </Typography>
+            {roles.map((option) => (
+              <MenuItem key={option.id} onClick={() => handleRoleChange(option.id)} sx={{ py: 1 }}>
+                <ListItemIcon>
+                  {option.id === role?.id ? (
+                    <Check size={16} strokeWidth={2} color={colors.brand} aria-hidden="true" />
+                  ) : (
+                    <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
+                  )}
+                </ListItemIcon>
+                <ListItemText
+                  primary={option.name}
+                  secondary={option.description}
+                  slotProps={{
+                    primary: { fontSize: '0.8125rem', fontWeight: option.id === role?.id ? 600 : 500 },
+                    secondary: { fontSize: '0.75rem' },
+                  }}
+                />
+              </MenuItem>
+            ))}
+            <Divider />
+          </>
+        )}
+        <MenuItem
+          sx={{ py: 1.25 }}
+          onClick={async () => {
+            setProfileAnchor(null)
+            await logout()
+            navigate(ROUTES.login, { replace: true })
+          }}
+        >
           <ListItemIcon>
             <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
           </ListItemIcon>
-          <ListItemText
-            primary="Sign out"
-            secondary="Available once the backend is connected"
-            slotProps={{ primary: { fontSize: '0.875rem' }, secondary: { fontSize: '0.75rem' } }}
-          />
+          <ListItemText primary="Sign out" slotProps={{ primary: { fontSize: '0.8125rem' } }} />
         </MenuItem>
       </Menu>
     </Box>

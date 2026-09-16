@@ -56,8 +56,8 @@ export const PerformanceReviewDetailDialog = ({ review, onClose, onSaved }) => {
 
   return (
     <Dialog open onClose={submitting ? undefined : onClose} maxWidth="md" fullWidth>
-        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 600 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>
+          <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{review.employeeName}</span>
             <StatusChip status={review.status} />
           </Stack>
@@ -68,14 +68,14 @@ export const PerformanceReviewDetailDialog = ({ review, onClose, onSaved }) => {
 
         <DialogContent dividers>
           {error ? (
-            <Alert severity="error" sx={{ mb: 2.5 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {isForbidden(error)
                 ? 'You do not have permission to update this review.'
                 : (error.message ?? 'The review could not be saved.')}
             </Alert>
           ) : null}
           {succeeded ? (
-            <Alert severity="success" sx={{ mb: 2.5 }} onClose={reset}>
+            <Alert severity="success" sx={{ mb: 2 }} onClose={reset}>
               Review updated.
             </Alert>
           ) : null}
@@ -98,9 +98,13 @@ export const PerformanceReviewDetailDialog = ({ review, onClose, onSaved }) => {
           <Stack spacing={2}>
             {review.goals.map((goal) => (
               <Box key={goal.id}>
-                <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2} sx={{ mb: 0.75 }}>
+                <Stack
+                  direction="row"
+                  spacing={2}
+                  sx={{ justifyContent: 'space-between', alignItems: 'center', mb: 0.75 }}
+                >
                   <Typography variant="body2">{goal.title}</Typography>
-                  <Stack direction="row" spacing={1} alignItems="center" sx={{ flexShrink: 0 }}>
+                  <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
                     <Chip
                       label={goal.status}
                       size="small"
@@ -165,7 +169,7 @@ export const PerformanceReviewDetailDialog = ({ review, onClose, onSaved }) => {
           </Stack>
         </DialogContent>
 
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
           <Button onClick={onClose} variant="outlined" disabled={submitting}>
             Close
           </Button>

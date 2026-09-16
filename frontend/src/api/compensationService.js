@@ -1,5 +1,5 @@
 import { PERMISSIONS } from '@/constants/permissions'
-import { db, getActiveRole } from './mockDb'
+import { db, getCurrentUser } from './mockDb'
 import { badRequest, mockRequest, notFound } from './httpClient'
 import { DEFAULT_PAGE_SIZE, byDateDescending, matchesSearch, paginate } from './queryUtils'
 
@@ -124,7 +124,7 @@ export const compensationService = {
           newSalary,
           effectiveDate,
           reason,
-          approvedBy: getActiveRole().user.name,
+          approvedBy: getCurrentUser().name,
         }
 
         db.salaryHistory.push(entry)

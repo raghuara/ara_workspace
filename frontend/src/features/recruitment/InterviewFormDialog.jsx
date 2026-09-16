@@ -101,12 +101,12 @@ export const InterviewFormDialog = ({ open, interview, onClose, onSaved }) => {
   return (
     <Dialog open={open} onClose={submitting ? undefined : onClose} maxWidth="md" fullWidth>
       <Box component="form" onSubmit={handleSubmit} noValidate>
-        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 600 }}>
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>
           {isEditing ? 'Edit interview' : 'Schedule interview'}
         </DialogTitle>
         <DialogContent dividers>
           {error ? (
-            <Alert severity="error" sx={{ mb: 2.5 }}>
+            <Alert severity="error" sx={{ mb: 2 }}>
               {isForbidden(error)
                 ? 'You do not have permission to change the interview schedule.'
                 : (error.message ?? 'The interview could not be saved.')}
@@ -180,7 +180,7 @@ export const InterviewFormDialog = ({ open, interview, onClose, onSaved }) => {
             placeholder="Context for the interviewer, scheduling constraints, and so on"
           />
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
           <Button onClick={onClose} variant="outlined" disabled={submitting}>
             Cancel
           </Button>

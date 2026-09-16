@@ -19,8 +19,8 @@ export const InterviewReviewDetailDialog = ({ review, onClose }) => (
   <Dialog open={Boolean(review)} onClose={onClose} maxWidth="sm" fullWidth>
     {review ? (
       <>
-        <DialogTitle sx={{ fontSize: '1.125rem', fontWeight: 600 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" spacing={2}>
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>
+          <Stack direction="row" spacing={2} sx={{ justifyContent: 'space-between', alignItems: 'center' }}>
             <span>{review.candidateName}</span>
             <StatusChip status={review.recommendation} />
           </Stack>
@@ -61,7 +61,7 @@ export const InterviewReviewDetailDialog = ({ review, onClose }) => (
             <Typography variant="body2">{review.notes || 'No notes were recorded.'}</Typography>
           </Box>
         </DialogContent>
-        <DialogActions sx={{ px: 3, py: 2 }}>
+        <DialogActions sx={{ px: 3, py: 1.5 }}>
           <Button onClick={onClose} variant="outlined">
             Close
           </Button>

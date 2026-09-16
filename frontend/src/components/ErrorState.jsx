@@ -7,7 +7,7 @@ export const ErrorState = ({
   description = 'The request could not be completed. Please try again.',
   onRetry,
 }) => (
-  <Stack spacing={1.5} alignItems="center" sx={{ py: 7, px: 3, textAlign: 'center' }} role="alert">
+  <Stack spacing={1.5} sx={{ alignItems: 'center', py: 7, px: 3, textAlign: 'center' }} role="alert">
     <Box
       sx={{
         width: 48,

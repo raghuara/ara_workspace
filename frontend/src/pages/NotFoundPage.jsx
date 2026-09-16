@@ -5,7 +5,7 @@ import { ROUTES } from '@/constants/routes'
 
 export const NotFoundPage = () => (
   <Card sx={{ p: { xs: 3, md: 6 } }}>
-    <Stack spacing={2} alignItems="center" sx={{ textAlign: 'center' }}>
+    <Stack spacing={2} sx={{ alignItems: 'center', textAlign: 'center' }}>
       <Typography variant="h1" component="p" sx={{ fontSize: '2.5rem' }}>
         404
       </Typography>

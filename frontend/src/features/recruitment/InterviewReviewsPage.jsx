@@ -73,8 +73,7 @@ export const InterviewReviewsPage = () => {
         <Stack
           direction={{ xs: 'column', md: 'row' }}
           spacing={1.5}
-          alignItems={{ xs: 'stretch', md: 'center' }}
-          sx={{ p: 2.5 }}
+          sx={{ alignItems: { xs: 'stretch', md: 'center' }, p: 2 }}
         >
           <SearchField
             value={search}
@@ -134,7 +133,7 @@ export const InterviewReviewsPage = () => {
                       aria-label={`Open review for ${review.candidateName}`}
                     >
                       <TableCell>
-                        <Stack direction="row" spacing={1.5} alignItems="center">
+                        <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center' }}>
                           <UserAvatar name={review.candidateName} size={34} />
                           <Typography variant="body2" fontWeight={600}>
                             {review.candidateName}
