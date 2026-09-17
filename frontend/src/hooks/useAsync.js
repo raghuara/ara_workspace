@@ -10,10 +10,14 @@ import { useCallback, useEffect, useState } from 'react'
  * Loading is derived by comparing the requested key against the settled key so
  * that no state is written synchronously inside the effect.
  */
-export const useAsync = (fetcher, args = [], { enabled = true } = {}) => {
+export const useAsync = (fetcher, args = [], { enabled = true, initialData } = {}) => {
   const argsKey = JSON.stringify(args)
   const [reloadToken, setReloadToken] = useState(0)
-  const [state, setState] = useState({ key: null, data: null, error: null })
+  const [state, setState] = useState(() =>
+    initialData === undefined
+      ? { key: null, data: null, error: null }
+      : { key: `${argsKey}#0`, data: initialData, error: null },
+  )
 
   const requestKey = `${argsKey}#${reloadToken}`
 

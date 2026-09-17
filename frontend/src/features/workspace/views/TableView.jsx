@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import {
   Box,
+  IconButton,
+  InputBase,
   LinearProgress,
   Stack,
   Table,
@@ -13,11 +15,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { AlignLeft, Flag, Maximize2, Paperclip, TriangleAlert } from 'lucide-react'
+import { AlignLeft, Flag, Maximize2, Paperclip, Pencil, TextCursorInput, TriangleAlert } from 'lucide-react'
 import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { EmptyState } from '@/components/EmptyState'
+import { QuickAddCard } from '../components/QuickAddCard'
+import { taskService } from '@/api/taskService'
+import { PERMISSIONS } from '@/constants/permissions'
+import { usePermissions } from '@/hooks/usePermissions'
+import { useAccess } from '@/hooks/useAccess'
 import { PRIORITY_TONES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { colors } from '@/theme/tokens'
 import { formatDate, formatRelativeDay } from '@/utils/date'
@@ -35,7 +42,110 @@ const COLUMNS = [
 
 const PRIORITY_ORDER = { Urgent: 0, High: 1, Normal: 2, Low: 3 }
 
-export const TableView = ({ board, loading, onOpenTask }) => {
+const TitleCell = ({ task, canUpdate, onChanged, onEdit }) => {
+  const [renaming, setRenaming] = useState(false)
+  const [draft, setDraft] = useState(task.title)
+  const stop = (event) => event.stopPropagation()
+
+  const commitRename = async () => {
+    setRenaming(false)
+    const title = draft.trim()
+    if (!title || title === task.title) return
+    try {
+      await taskService.updateTask(task.id, { title })
+      onChanged?.()
+    } catch {
+      setDraft(task.title)
+    }
+  }
+
+  if (renaming) {
+    return (
+      <InputBase
+        autoFocus
+        fullWidth
+        value={draft}
+        aria-label="Rename task"
+        onChange={(event) => setDraft(event.target.value)}
+        onFocus={(event) => event.target.select()}
+        onBlur={commitRename}
+        onClick={stop}
+        onKeyDown={(event) => {
+          event.stopPropagation()
+          if (event.key === 'Enter') {
+            event.preventDefault()
+            commitRename()
+          }
+          if (event.key === 'Escape') {
+            setDraft(task.title)
+            setRenaming(false)
+          }
+        }}
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          px: 0.75,
+          py: 0.125,
+          fontSize: '0.875rem',
+          fontWeight: 500,
+          borderRadius: 1,
+          bgcolor: colors.surface,
+          boxShadow: `0 0 0 2px ${colors.brand}`,
+        }}
+      />
+    )
+  }
+
+  return (
+    <>
+      <Typography variant="body2" fontWeight={500} noWrap sx={{ minWidth: 0 }}>
+        {task.title}
+      </Typography>
+      {canUpdate ? (
+        <Stack
+          direction="row"
+          spacing={0}
+          className="row-actions"
+          sx={{ opacity: 0, transition: 'opacity 120ms', flexShrink: 0 }}
+        >
+          <Tooltip title="Rename">
+            <IconButton
+              size="small"
+              aria-label={`Rename ${task.title}`}
+              onClick={(event) => {
+                stop(event)
+                setDraft(task.title)
+                setRenaming(true)
+              }}
+              sx={{ p: 0.375 }}
+            >
+              <TextCursorInput size={14} strokeWidth={1.75} />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Edit">
+            <IconButton
+              size="small"
+              aria-label={`Edit ${task.title}`}
+              onClick={(event) => {
+                stop(event)
+                onEdit?.(task)
+              }}
+              sx={{ p: 0.375 }}
+            >
+              <Pencil size={14} strokeWidth={1.75} />
+            </IconButton>
+          </Tooltip>
+        </Stack>
+      ) : null}
+    </>
+  )
+}
+
+export const TableView = ({ board, loading, onOpenTask, onChanged }) => {
+  const { can } = usePermissions()
+  const canUpdate = can(PERMISSIONS.TASK_UPDATE)
+  const { canEditTask } = useAccess()
+  const [editingTaskId, setEditingTaskId] = useState(null)
   const [orderBy, setOrderBy] = useState('dueDate')
   const [direction, setDirection] = useState('asc')
 
@@ -105,6 +215,28 @@ export const TableView = ({ board, loading, onOpenTask }) => {
               const statusTone = STATUS_TONES[task.statusTone] ?? STATUS_TONES.slate
               const priorityTone = STATUS_TONES[PRIORITY_TONES[task.priority] ?? 'gray']
 
+              if (editingTaskId === task.id) {
+                const column = board?.columns.find((item) => item.id === task.statusId) ?? {
+                  id: task.statusId,
+                  kind: task.statusKind,
+                }
+                return (
+                  <TableRow key={task.id}>
+                    <TableCell colSpan={COLUMNS.length} sx={{ p: 1.5, bgcolor: colors.page }}>
+                      <QuickAddCard
+                        column={column}
+                        task={task}
+                        onCancel={() => setEditingTaskId(null)}
+                        onSaved={() => {
+                          setEditingTaskId(null)
+                          onChanged?.()
+                        }}
+                      />
+                    </TableCell>
+                  </TableRow>
+                )
+              }
+
               return (
                 <TableRow
                   key={task.id}
@@ -115,7 +247,11 @@ export const TableView = ({ board, loading, onOpenTask }) => {
                     if (event.key === 'Enter') onOpenTask?.(task)
                   }}
                   aria-label={`Open ${task.title}`}
-                  sx={{ cursor: 'pointer', '&:hover .row-open': { opacity: 1 } }}
+                  sx={{
+                    cursor: 'pointer',
+                    '&:hover .row-open': { opacity: 1 },
+                    '&:hover .row-actions': { opacity: 1 },
+                  }}
                 >
                   <TableCell align="center">
                     <Typography variant="caption" sx={{ color: colors.textSecondary }}>
@@ -136,9 +272,12 @@ export const TableView = ({ board, loading, onOpenTask }) => {
                           bgcolor: task.statusKind === 'completed' ? statusTone.strong : 'transparent',
                         }}
                       />
-                      <Typography variant="body2" fontWeight={500} noWrap sx={{ minWidth: 0 }}>
-                        {task.title}
-                      </Typography>
+                      <TitleCell
+                        task={task}
+                        canUpdate={canUpdate && canEditTask(task)}
+                        onChanged={onChanged}
+                        onEdit={(target) => setEditingTaskId(target.id)}
+                      />
 
                       {task.description ? (
                         <Box sx={{ display: 'inline-flex', color: colors.textSecondary, flexShrink: 0 }}>

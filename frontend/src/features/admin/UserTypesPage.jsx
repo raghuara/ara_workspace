@@ -22,10 +22,11 @@ import { SectionCard } from '@/components/SectionCard'
 import { QueryStateView } from '@/components/QueryStateView'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ToneChip } from '@/components/ToneChip'
+import { TonePicker } from '@/components/TonePicker'
 import { UserAvatar } from '@/components/UserAvatar'
 import { adminService } from '@/api/adminService'
 import { PERMISSIONS, PERMISSION_CATALOG } from '@/constants/permissions'
-import { TONE_KEYS } from '@/constants/workspaceDomain'
+
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSession } from '@/hooks/useSession'
@@ -105,32 +106,15 @@ const UserTypeDialog = ({ userType, onClose, onSaved }) => {
               minRows={2}
               helperText="Shown wherever this type is listed, so say what the role is for."
             />
-            <Box>
-              <Typography variant="caption" component="p" sx={{ mb: 0.75 }}>
-                Colour
-              </Typography>
-              <Stack direction="row" spacing={0.75} sx={{ flexWrap: 'wrap' }} useFlexGap>
-                {TONE_KEYS.map((tone) => (
-                  <Box
-                    key={tone}
-                    component="button"
-                    type="button"
-                    aria-label={`Colour ${tone}`}
-                    aria-pressed={values.tone === tone}
-                    onClick={() => setValues((c) => ({ ...c, tone }))}
-                    sx={{ border: 0, background: 'none', p: 0, cursor: 'pointer' }}
-                  >
-                    <ToneChip
-                      label={values.name || tone}
-                      tone={tone}
-                      sx={values.tone === tone ? { outline: `2px solid ${colors.brand}`, outlineOffset: 1 } : undefined}
-                    />
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
+            <TonePicker
+              value={values.tone}
+              onChange={(tone) => setValues((c) => ({ ...c, tone }))}
+              previewLabel={values.name}
+            />
             {!isEditing ? (
-              <Alert severity="info">A new type starts with no permissions. Grant them from the panel once it exists.</Alert>
+              <Alert severity="info">
+                A new type starts with no permissions. Grant them from the panel once it exists.
+              </Alert>
             ) : null}
           </Stack>
         </DialogContent>
@@ -160,8 +144,7 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
 
   const locked = userType.permissionsLocked
   const readOnly = locked || !canManage
-  const sameAsSaved = (next) =>
-    JSON.stringify([...next].sort()) === JSON.stringify([...userType.permissions].sort())
+  const sameAsSaved = (next) => JSON.stringify([...next].sort()) === JSON.stringify([...userType.permissions].sort())
   const dirty = !sameAsSaved(draft)
 
   const update = (next) => {
@@ -224,7 +207,12 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
               </>
             ) : null}
             {dirty ? (
-              <Button size="small" variant="outlined" onClick={() => update(userType.permissions)} disabled={state.saving}>
+              <Button
+                size="small"
+                variant="outlined"
+                onClick={() => update(userType.permissions)}
+                disabled={state.saving}
+              >
                 Discard
               </Button>
             ) : null}
@@ -270,7 +258,10 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
                   <Box>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                       <Typography variant="h4">{group.label}</Typography>
-                      <ToneChip label={`${onCount}/${keys.length}`} tone={allOn ? 'green' : onCount ? 'blue' : 'gray'} />
+                      <ToneChip
+                        label={`${onCount}/${keys.length}`}
+                        tone={allOn ? 'green' : onCount ? 'blue' : 'gray'}
+                      />
                     </Stack>
                     <Typography variant="caption" component="p">
                       {group.description}
@@ -332,12 +323,18 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
       >
         <QueryStateView error={members.error} onRetry={members.reload}>
           {(members.data ?? []).length === 0 ? (
-            <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 2, py: 1.5, color: colors.textSecondary }}>
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{ alignItems: 'center', px: 2, py: 1.5, color: colors.textSecondary }}
+            >
               <Users size={15} strokeWidth={1.75} aria-hidden="true" />
               <Typography variant="caption">Assign people from Administration → Workspaces.</Typography>
             </Stack>
           ) : (
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' } }}>
+            <Box
+              sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', xl: 'repeat(3, 1fr)' } }}
+            >
               {members.data.map((member) => (
                 <Stack
                   key={member.id}
@@ -433,10 +430,14 @@ export const UserTypesPage = () => {
       <PageHeader
         title="User Types"
         description="Roles are permission sets, not named people. Master Admin, Admin and Employee always exist; add your own alongside them."
-        breadcrumbs={[{ label: 'Administration' }, { label: 'User Types' }]}
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Access' }, { label: 'User Types' }]}
         actions={
           canManage ? (
-            <Button variant="contained" startIcon={<Plus size={16} strokeWidth={2} />} onClick={() => setDialog({ userType: null })}>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} strokeWidth={2} />}
+              onClick={() => setDialog({ userType: null })}
+            >
               New user type
             </Button>
           ) : null
@@ -451,7 +452,11 @@ export const UserTypesPage = () => {
 
       <QueryStateView error={error} onRetry={reload}>
         <Box sx={{ display: 'grid', gap: 2, gridTemplateColumns: { xs: '1fr', lg: '320px 1fr' }, alignItems: 'start' }}>
-          <SectionCard title="User types" description={userTypes ? `${userTypes.length} defined` : undefined} padded={false}>
+          <SectionCard
+            title="User types"
+            description={userTypes ? `${userTypes.length} defined` : undefined}
+            padded={false}
+          >
             {loading ? null : (
               <Stack>
                 {userTypes?.map((type) => {
@@ -491,11 +496,26 @@ export const UserTypesPage = () => {
                         ) : null}
                       </Stack>
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mt: 0.5 }}>
-                        <Box sx={{ flex: 1, height: 4, borderRadius: 999, bgcolor: colors.neutralSoft, overflow: 'hidden' }}>
-                          <Box sx={{ width: `${(granted / TOTAL_PERMISSIONS) * 100}%`, height: '100%', bgcolor: colors.brand }} />
+                        <Box
+                          sx={{
+                            flex: 1,
+                            height: 4,
+                            borderRadius: 999,
+                            bgcolor: colors.neutralSoft,
+                            overflow: 'hidden',
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              width: `${(granted / TOTAL_PERMISSIONS) * 100}%`,
+                              height: '100%',
+                              bgcolor: colors.brand,
+                            }}
+                          />
                         </Box>
                         <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-                          {granted}/{TOTAL_PERMISSIONS} · {type.memberCount} {type.memberCount === 1 ? 'person' : 'people'}
+                          {granted}/{TOTAL_PERMISSIONS} · {type.memberCount}{' '}
+                          {type.memberCount === 1 ? 'person' : 'people'}
                         </Typography>
                       </Stack>
                     </Box>

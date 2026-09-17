@@ -1,6 +1,5 @@
 import { ApiError, apiRequest, clearToken, storeToken } from './httpClient'
 
-export const DEMO_PASSWORD = 'Admin@123'
 
 /**
  * POST /api/auth/login on the Node backend returns { token, session }. The
@@ -23,20 +22,8 @@ export const authService = {
     return result
   },
 
-  // JWTs are stateless: signing out is simply forgetting the token.
   logout: async () => {
     clearToken()
     return { ok: true }
   },
-
-  /** Development-only: the accounts the login screen offers to fill in. */
-  listDemoAccounts: async () => [
-    {
-      roleId: 'master-admin',
-      name: 'Shanika Peiris',
-      email: 'shanika.peiris@araworkspace.com',
-      designation: 'HR Manager',
-      userTypeId: 1,
-    },
-  ],
 }

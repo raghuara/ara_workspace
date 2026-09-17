@@ -95,32 +95,46 @@ const loadWorkspaceSnapshot = async (workspaceId) => {
   };
 };
 
-const findEmployeeStats = async () => {
+const scopeClause = (workspaceIds) => {
+  if (workspaceIds === null) return { where: "", params: [] };
+  if (workspaceIds.length === 0) return { where: " WHERE 1 = 0", params: [] };
+  return { where: " WHERE workspace_id IN (?)", params: [workspaceIds] };
+};
+
+const findEmployeeStats = async (workspaceIds = null) => {
+  const scope = scopeClause(workspaceIds);
   const [[totals]] = await pool.query(
     `SELECT
        SUM(status <> 'Inactive') AS active,
        SUM(joining_date >= DATE_SUB(CURDATE(), INTERVAL 90 DAY)) AS new_joiners,
        SUM(status = 'Probation') AS on_probation,
        SUM(status = 'Notice Period') AS on_notice
-     FROM employees`
+     FROM employees${scope.where}`,
+    scope.params
   );
   const [departments] = await pool.query(
-    "SELECT department, COUNT(*) AS count FROM employees GROUP BY department ORDER BY count DESC, department"
+    `SELECT department, COUNT(*) AS count FROM employees${scope.where} GROUP BY department ORDER BY count DESC, department`,
+    scope.params
   );
   return { totals, departments };
 };
 
-const countActiveEmployees = async () => {
-  const [[{ total }]] = await pool.query("SELECT COUNT(*) AS total FROM employees WHERE status <> 'Inactive'");
+const countActiveEmployees = async (workspaceIds = null) => {
+  const scope = scopeClause(workspaceIds);
+  const [[{ total }]] = await pool.query(
+    `SELECT COUNT(*) AS total FROM employees${scope.where}${scope.where ? " AND" : " WHERE"} status <> 'Inactive'`,
+    scope.params
+  );
   return total;
 };
 
-const findRecentEmployees = async (limit) => {
+const findRecentEmployees = async (limit, workspaceIds = null) => {
+  const scope = scopeClause(workspaceIds);
   const [rows] = await pool.query(
     `SELECT employee_id, CONCAT(first_name, ' ', last_name) AS full_name, designation, department,
             DATE_FORMAT(joining_date, '%Y-%m-%d') AS joining_date, status
-     FROM employees ORDER BY joining_date DESC, employee_id DESC LIMIT ?`,
-    [limit]
+     FROM employees${scope.where} ORDER BY joining_date DESC, employee_id DESC LIMIT ?`,
+    [...scope.params, limit]
   );
   return rows;
 };

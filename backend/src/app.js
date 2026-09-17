@@ -16,6 +16,7 @@ const activityRoutes = require("./routes/activity.routes");
 const dashboardRoutes = require("./routes/dashboard.routes");
 const recurringRoutes = require("./routes/recurring.routes");
 const notificationRoutes = require("./routes/notification.routes");
+const performanceRoutes = require("./routes/performance.routes");
 const { notFoundHandler, errorHandler } = require("./middleware/error.middleware");
 
 const app = express();
@@ -30,13 +31,27 @@ const allowedOrigins = [
   ...(process.env.CLIENT_URL || "").split(",").map((origin) => origin.trim()).filter(Boolean)
 ];
 
+const LAN_ORIGIN = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5173$/;
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || allowedOrigins.includes(origin) || LAN_ORIGIN.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    }
+  })
+);
+
+
 app.use(
   helmet({
     contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" }
   })
 );
-app.use(cors({ origin: allowedOrigins }));
 app.use(express.json({ limit: "1mb" }));
 
 const loginLimiter = rateLimit({
@@ -69,6 +84,7 @@ app.use("/api/clients", clientRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/designations", designationRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/performance", performanceRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/activity", activityRoutes);
 app.use("/api", dashboardRoutes);

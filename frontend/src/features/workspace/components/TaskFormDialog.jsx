@@ -25,6 +25,7 @@ import { FEATURES } from '@/constants/features'
 import { useFeatures } from '@/hooks/useFeatures'
 import { useSubmit } from '@/hooks/useSubmit'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import { useAccess } from '@/hooks/useAccess'
 import { colors } from '@/theme/tokens'
 import { PERMISSIONS } from '@/constants/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -69,7 +70,9 @@ const validate = (values, mode, { canAssign }) => {
 
 export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, defaultTeamId, onClose, onSaved }) => {
   const isEditing = Boolean(task)
-  const { columns, groups, teams, clients, assignableMembers, activeWorkspaceId } = useWorkspace()
+  const { columns, clients, assignableMembers, activeWorkspaceId } = useWorkspace()
+  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam } = useAccess()
+  const groups = groupOptions(task?.groupId ?? null)
   const { isEnabled } = useFeatures()
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
 
@@ -87,8 +90,10 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
     title: task?.title ?? '',
     description: task?.description ?? '',
     clientId: task?.clientId ?? '',
-    groupId: task?.groupId ?? defaultGroupId ?? '',
-    teamId: task?.teamId ?? defaultTeamId ?? '',
+    groupId:
+      task?.groupId ??
+      (groups.some((item) => item.id === defaultGroupId) ? defaultGroupId : groups.length === 1 ? groups[0].id : ''),
+    teamId: task?.teamId ?? (groups.some((item) => item.id === defaultGroupId) ? (defaultTeamId ?? '') : ''),
     statusId: task?.statusId ?? defaultStatusId ?? todoColumn?.id ?? '',
     assigneeIds: task?.assigneeIds ?? [],
     priority: task?.priority ?? PRIORITIES.NORMAL,
@@ -111,9 +116,10 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
   )
 
   const teamOptions = useMemo(
-    () => (values.groupId ? teams.filter((team) => team.groupId === values.groupId) : teams),
-    [teams, values.groupId],
+    () => (values.groupId ? teamOptionsFor(values.groupId, task?.teamId ?? null) : []),
+    [teamOptionsFor, values.groupId, task],
   )
+  const noTeamAllowed = allowsNoTeam(values.groupId) || (task && task.groupId === values.groupId && !task.teamId)
 
   const size = sizeByKey(values.sizeKey)
 
@@ -260,7 +266,7 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
             </TextField>
 
             <TextField {...fieldProps('teamId', 'Team', { select: true })}>
-              <MenuItem value="">No specific team</MenuItem>
+              {noTeamAllowed ? <MenuItem value="">No specific team</MenuItem> : null}
               {teamOptions.map((team) => (
                 <MenuItem key={team.id} value={team.id}>
                   {team.name}

@@ -1,7 +1,8 @@
 import { apiRequest, toQueryString } from './httpClient'
 
 const createCatalogService = (path) => ({
-  list: ({ activeOnly = false } = {}) => apiRequest(`${path}${toQueryString({ active: activeOnly ? 'true' : '' })}`),
+  list: ({ workspaceId, activeOnly = false } = {}) =>
+    apiRequest(`${path}${toQueryString({ workspaceId, active: activeOnly ? 'true' : '' })}`),
   create: (payload) => apiRequest(path, { method: 'POST', body: payload }),
   update: (id, payload) => apiRequest(`${path}/${encodeURIComponent(id)}`, { method: 'PUT', body: payload }),
   remove: (id) => apiRequest(`${path}/${encodeURIComponent(id)}`, { method: 'DELETE' }),

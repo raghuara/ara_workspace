@@ -7,11 +7,13 @@ const TABLES = {
   COL: "status_columns",
   CLI: "clients",
   TSK: "tasks",
-  RCR: "recurring_tasks"
+  RCR: "recurring_tasks",
+  PRV: "performance_reviews"
 };
 
 const PADDING = {
-  TSK: 4
+  TSK: 4,
+  PRV: 4
 };
 
 const nextId = async (prefix, connection = pool) => {

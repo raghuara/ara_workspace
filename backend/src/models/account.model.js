@@ -3,6 +3,8 @@ const pool = require("../config/database");
 const ACCOUNT_SELECT = `
   SELECT
     e.employee_id,
+    e.workspace_id,
+    w.name AS workspace_name,
     CONCAT(e.first_name, ' ', e.last_name) AS full_name,
     e.email AS work_email,
     e.department,
@@ -17,18 +19,37 @@ const ACCOUNT_SELECT = `
     DATE_FORMAT(u.last_login_at, '%Y-%m-%dT%H:%i:%s') AS last_login_at,
     DATE_FORMAT(u.created_at, '%Y-%m-%d') AS account_created_at
   FROM employees e
+  LEFT JOIN workspaces w ON w.id = e.workspace_id
   LEFT JOIN users u ON u.employee_id = e.employee_id
   LEFT JOIN user_types ut ON ut.id = u.user_type_id
 `;
 
-const findAccounts = async ({ search }) => {
+const findAccounts = async ({ search, workspaceId, workspaceIds, includeUnassigned }) => {
+  const clauses = [];
   const params = [];
-  let where = "";
+
+  if (workspaceId) {
+    if (includeUnassigned) {
+      clauses.push("(e.workspace_id = ? OR e.workspace_id IS NULL)");
+    } else {
+      clauses.push("e.workspace_id = ?");
+    }
+    params.push(workspaceId);
+  } else if (Array.isArray(workspaceIds)) {
+    if (workspaceIds.length === 0) clauses.push("1 = 0");
+    else {
+      clauses.push("e.workspace_id IN (?)");
+      params.push(workspaceIds);
+    }
+  }
+
   if (search) {
     const term = `%${search}%`;
-    where = "WHERE (CONCAT(e.first_name, ' ', e.last_name) LIKE ? OR e.employee_id LIKE ? OR e.email LIKE ? OR e.department LIKE ?)";
+    clauses.push("(CONCAT(e.first_name, ' ', e.last_name) LIKE ? OR e.employee_id LIKE ? OR e.email LIKE ? OR e.department LIKE ?)");
     params.push(term, term, term, term);
   }
+
+  const where = clauses.length ? `WHERE ${clauses.join(" AND ")}` : "";
   const [rows] = await pool.query(`${ACCOUNT_SELECT} ${where} ORDER BY u.id IS NULL, e.first_name, e.last_name`, params);
   return rows;
 };
@@ -38,8 +59,8 @@ const findAccountByEmployeeId = async (employeeId) => {
   return rows[0] || null;
 };
 
-const insertAccount = async ({ employeeId, email, passwordHash, userTypeId }) => {
-  await pool.query(
+const insertAccount = async ({ employeeId, email, passwordHash, userTypeId }, connection = pool) => {
+  await connection.query(
     `INSERT INTO users (employee_id, email, password_hash, user_type_id, is_active, must_change_password)
      VALUES (?, ?, ?, ?, TRUE, TRUE)`,
     [employeeId, email, passwordHash, userTypeId]
@@ -66,9 +87,9 @@ const countActiveUsersOfType = async (userTypeId, excludeUserId = null) => {
   return total;
 };
 
-const userTypeExists = async (userTypeId) => {
-  const [rows] = await pool.query("SELECT id FROM user_types WHERE id = ? LIMIT 1", [userTypeId]);
-  return rows.length > 0;
+const findUserTypes = async () => {
+  const [rows] = await pool.query("SELECT id, name, slug, tone, permissions FROM user_types ORDER BY id");
+  return rows;
 };
 
 module.exports = {
@@ -79,5 +100,5 @@ module.exports = {
   setPassword,
   touchLastLogin,
   countActiveUsersOfType,
-  userTypeExists
+  findUserTypes
 };

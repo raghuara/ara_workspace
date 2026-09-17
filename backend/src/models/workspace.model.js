@@ -129,22 +129,6 @@ const upsertMember = async (member, connection = pool) => {
   );
 };
 
-const findMemberScope = async (workspaceId, employeeId) => {
-  const [rows] = await pool.query(
-    "SELECT task_scope FROM workspace_members WHERE workspace_id = ? AND employee_id = ? LIMIT 1",
-    [workspaceId, employeeId]
-  );
-  return rows[0]?.task_scope ?? "team";
-};
-
-const updateMemberScope = async (workspaceId, employeeId, taskScope) => {
-  const [result] = await pool.query(
-    "UPDATE workspace_members SET task_scope = ? WHERE workspace_id = ? AND employee_id = ?",
-    [taskScope, workspaceId, employeeId]
-  );
-  return result.affectedRows > 0;
-};
-
 const removeMember = async (workspaceId, employeeId) => {
   await pool.query("DELETE FROM workspace_members WHERE workspace_id = ? AND employee_id = ?", [
     workspaceId,
@@ -159,7 +143,6 @@ const findMembers = async (workspaceId) => {
        m.user_type_id,
        m.group_id,
        m.team_id,
-       m.task_scope,
        CONCAT(e.first_name, ' ', e.last_name) AS full_name,
        e.designation,
        e.department,
@@ -372,8 +355,6 @@ module.exports = {
   deleteWorkspace,
   isMember,
   upsertMember,
-  findMemberScope,
-  updateMemberScope,
   removeMember,
   findMembers,
   findGroups,

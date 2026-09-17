@@ -43,15 +43,17 @@ const buildFilters = ({ workspaceId, visibility, filters }) => {
   const params = [workspaceId];
 
   if (visibility) {
-    if (visibility.teamIds.length > 0) {
-      clauses.push(
-        "(EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.employee_id = ?) OR t.team_id IN (?))"
-      );
-      params.push(visibility.employeeId, visibility.teamIds);
-    } else {
-      clauses.push("EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.employee_id = ?)");
-      params.push(visibility.employeeId);
+    const reach = ["EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.employee_id = ?)"];
+    params.push(visibility.employeeId);
+    if (visibility.groupIds.length > 0) {
+      reach.push("t.group_id IN (?)");
+      params.push(visibility.groupIds);
     }
+    if (visibility.teamIds.length > 0) {
+      reach.push("t.team_id IN (?)");
+      params.push(visibility.teamIds);
+    }
+    clauses.push(`(${reach.join(" OR ")})`);
   }
 
   if (filters.search) {

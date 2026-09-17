@@ -9,6 +9,7 @@ export const FEATURES = {
   CLIENTS: 'clients',
   EMPLOYEES: 'employees',
   ACTIVITY_LOG: 'activity',
+  PERFORMANCE: 'performance',
   REPORTS: 'reports',
 }
 
@@ -94,6 +95,18 @@ export const FEATURE_CATALOG = [
         key: FEATURES.ACTIVITY_LOG,
         name: 'Activity log',
         description: 'Organisation-wide audit trail of every change.',
+        defaultEnabled: true,
+      },
+    ],
+  },
+  {
+    key: 'people',
+    label: 'People',
+    features: [
+      {
+        key: FEATURES.PERFORMANCE,
+        name: 'Performance',
+        description: 'Employee review cycles, ratings and goals.',
         defaultEnabled: true,
       },
     ],

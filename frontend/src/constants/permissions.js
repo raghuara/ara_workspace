@@ -11,7 +11,6 @@ export const PERMISSIONS = {
 
   // Tasks
   TASK_VIEW: 'task.view',
-  TASK_VIEW_ALL: 'task.view.all',
   TASK_CREATE: 'task.create',
   TASK_UPDATE: 'task.update',
   TASK_DELETE: 'task.delete',
@@ -30,6 +29,10 @@ export const PERMISSIONS = {
   EMPLOYEE_VIEW: 'employee.view',
   EMPLOYEE_UPDATE: 'employee.update',
 
+  // Performance
+  REVIEW_VIEW: 'review.view',
+  REVIEW_UPDATE: 'review.update',
+
   // Insight
   DASHBOARD_VIEW: 'dashboard.view',
 
@@ -37,9 +40,9 @@ export const PERMISSIONS = {
   USERTYPE_VIEW: 'usertype.view',
   USERTYPE_MANAGE: 'usertype.manage',
   FEATURE_MANAGE: 'feature.manage',
+  ACCOUNT_MANAGE: 'account.manage',
   ACTIVITY_VIEW: 'activity.view',
   REPORT_VIEW: 'report.view',
-
 }
 
 /**
@@ -67,8 +70,7 @@ export const PERMISSION_CATALOG = [
     label: 'Tasks',
     description: 'Day-to-day work items',
     permissions: [
-      { key: PERMISSIONS.TASK_VIEW, label: 'View own and team tasks' },
-      { key: PERMISSIONS.TASK_VIEW_ALL, label: 'View every task in the workspace' },
+      { key: PERMISSIONS.TASK_VIEW, label: 'View tasks (where is decided per person in Setup › Workspaces › Members)' },
       { key: PERMISSIONS.TASK_CREATE, label: 'Create tasks' },
       { key: PERMISSIONS.TASK_UPDATE, label: 'Edit tasks' },
       { key: PERMISSIONS.TASK_DELETE, label: 'Delete tasks' },
@@ -99,6 +101,15 @@ export const PERMISSION_CATALOG = [
     ],
   },
   {
+    key: 'performance',
+    label: 'Performance',
+    description: 'Review cycles, ratings and goals',
+    permissions: [
+      { key: PERMISSIONS.REVIEW_VIEW, label: 'View performance reviews' },
+      { key: PERMISSIONS.REVIEW_UPDATE, label: 'Create and edit performance reviews' },
+    ],
+  },
+  {
     key: 'insight',
     label: 'Insight',
     description: 'Dashboards, reports and the activity log',
@@ -114,7 +125,8 @@ export const PERMISSION_CATALOG = [
     description: 'Roles, logins and feature access',
     permissions: [
       { key: PERMISSIONS.USERTYPE_VIEW, label: 'View user types' },
-      { key: PERMISSIONS.USERTYPE_MANAGE, label: 'Create and edit user types, manage logins' },
+      { key: PERMISSIONS.USERTYPE_MANAGE, label: 'Create and edit user types' },
+      { key: PERMISSIONS.ACCOUNT_MANAGE, label: 'Create logins and reset passwords for people in their workspaces' },
       { key: PERMISSIONS.FEATURE_MANAGE, label: 'Turn features on and off' },
     ],
   },

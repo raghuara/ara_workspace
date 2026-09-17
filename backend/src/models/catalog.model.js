@@ -4,15 +4,16 @@ const createCatalogModel = ({ table, employeeColumn }) => {
   const SELECT = `
     SELECT
       c.id,
+      c.workspace_id,
       c.name,
       c.description,
       c.is_active,
-      (SELECT COUNT(*) FROM employees e WHERE e.${employeeColumn} = c.name) AS employee_count
+      (SELECT COUNT(*) FROM employees e WHERE e.${employeeColumn} = c.name AND e.workspace_id = c.workspace_id) AS employee_count
     FROM ${table} c
   `;
 
-  const findAll = async () => {
-    const [rows] = await pool.query(`${SELECT} ORDER BY c.name`);
+  const findAll = async (workspaceId) => {
+    const [rows] = await pool.query(`${SELECT} WHERE c.workspace_id = ? ORDER BY c.name`, [workspaceId]);
     return rows;
   };
 
@@ -21,17 +22,19 @@ const createCatalogModel = ({ table, employeeColumn }) => {
     return rows[0] || null;
   };
 
-  const findActiveByName = async (name) => {
-    const [rows] = await pool.query(`SELECT id, name FROM ${table} WHERE name = ? AND is_active = TRUE LIMIT 1`, [name]);
+  const findActiveByName = async (workspaceId, name) => {
+    const [rows] = await pool.query(
+      `SELECT id, name FROM ${table} WHERE workspace_id = ? AND name = ? AND is_active = TRUE LIMIT 1`,
+      [workspaceId, name]
+    );
     return rows[0] || null;
   };
 
   const insert = async (item) => {
-    const [result] = await pool.query(`INSERT INTO ${table} (name, description, is_active) VALUES (?, ?, ?)`, [
-      item.name,
-      item.description,
-      item.isActive
-    ]);
+    const [result] = await pool.query(
+      `INSERT INTO ${table} (workspace_id, name, description, is_active) VALUES (?, ?, ?, ?)`,
+      [item.workspaceId, item.name, item.description, item.isActive]
+    );
     return result.insertId;
   };
 
@@ -44,8 +47,11 @@ const createCatalogModel = ({ table, employeeColumn }) => {
     ]);
   };
 
-  const renameOnEmployees = async (oldName, newName, connection) => {
-    await connection.query(`UPDATE employees SET ${employeeColumn} = ? WHERE ${employeeColumn} = ?`, [newName, oldName]);
+  const renameOnEmployees = async (workspaceId, oldName, newName, connection) => {
+    await connection.query(
+      `UPDATE employees SET ${employeeColumn} = ? WHERE ${employeeColumn} = ? AND workspace_id = ?`,
+      [newName, oldName, workspaceId]
+    );
   };
 
   const remove = async (id) => {

@@ -3,6 +3,7 @@ import {
   Box,
   Button,
   IconButton,
+  InputBase,
   LinearProgress,
   Menu,
   MenuItem,
@@ -10,15 +11,27 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { AlignLeft, ChevronDown, Flag, MessageSquare, Paperclip, Plus, TriangleAlert } from 'lucide-react'
+import {
+  AlignLeft,
+  ChevronDown,
+  Flag,
+  MessageSquare,
+  Paperclip,
+  Pencil,
+  Plus,
+  TextCursorInput,
+  TriangleAlert,
+} from 'lucide-react'
 import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { EmptyState } from '@/components/EmptyState'
+import { QuickAddCard } from '../components/QuickAddCard'
 import { taskService } from '@/api/taskService'
 import { PERMISSIONS } from '@/constants/permissions'
 import { PRIORITY_TONES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAccess } from '@/hooks/useAccess'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
@@ -88,7 +101,12 @@ const StatusDot = ({ task, columns, canMove, onChanged }) => {
         {columns.map((column) => {
           const optionTone = STATUS_TONES[column.tone] ?? STATUS_TONES.slate
           return (
-            <MenuItem key={column.id} selected={column.id === task.statusId} onClick={() => move(column.id)} sx={{ gap: 1.25 }}>
+            <MenuItem
+              key={column.id}
+              selected={column.id === task.statusId}
+              onClick={() => move(column.id)}
+              sx={{ gap: 1.25 }}
+            >
               <Box
                 aria-hidden="true"
                 sx={{ width: 11, height: 11, borderRadius: '50%', border: `2.5px solid ${optionTone.strong}` }}
@@ -102,16 +120,33 @@ const StatusDot = ({ task, columns, canMove, onChanged }) => {
   )
 }
 
-const TaskRow = ({ task, columns, canMove, onOpenTask, onChanged }) => {
+const TaskRow = ({ task, columns, canMove, canUpdate, onOpenTask, onChanged, onEdit }) => {
   const priorityTone = STATUS_TONES[PRIORITY_TONES[task.priority] ?? 'gray']
+  const [renaming, setRenaming] = useState(false)
+  const [draft, setDraft] = useState(task.title)
+  const stop = (event) => event.stopPropagation()
+
+  const commitRename = async () => {
+    setRenaming(false)
+    const title = draft.trim()
+    if (!title || title === task.title) return
+    try {
+      await taskService.updateTask(task.id, { title })
+      onChanged?.()
+    } catch {
+      setDraft(task.title)
+    }
+  }
 
   return (
     <Box
       role="button"
       tabIndex={0}
-      onClick={() => onOpenTask?.(task)}
+      onClick={() => {
+        if (!renaming) onOpenTask?.(task)
+      }}
       onKeyDown={(event) => {
-        if (event.key === 'Enter') onOpenTask?.(task)
+        if (!renaming && event.key === 'Enter') onOpenTask?.(task)
       }}
       aria-label={`Open ${task.title}`}
       sx={{
@@ -125,13 +160,85 @@ const TaskRow = ({ task, columns, canMove, onOpenTask, onChanged }) => {
         borderBottom: `1px solid ${colors.border}`,
         '&:last-of-type': { borderBottom: 0 },
         '&:hover': { bgcolor: colors.page },
+        '&:hover .row-actions': { opacity: 1 },
       }}
     >
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
         <StatusDot task={task} columns={columns} canMove={canMove} onChanged={onChanged} />
-        <Typography variant="body2" fontWeight={500} noWrap sx={{ minWidth: 0 }}>
-          {task.title}
-        </Typography>
+        {renaming ? (
+          <InputBase
+            autoFocus
+            fullWidth
+            value={draft}
+            aria-label="Rename task"
+            onChange={(event) => setDraft(event.target.value)}
+            onFocus={(event) => event.target.select()}
+            onBlur={commitRename}
+            onClick={stop}
+            onKeyDown={(event) => {
+              event.stopPropagation()
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                commitRename()
+              }
+              if (event.key === 'Escape') {
+                setDraft(task.title)
+                setRenaming(false)
+              }
+            }}
+            sx={{
+              flex: 1,
+              minWidth: 0,
+              px: 0.75,
+              py: 0.125,
+              fontSize: '0.875rem',
+              fontWeight: 500,
+              borderRadius: 1,
+              bgcolor: colors.surface,
+              boxShadow: `0 0 0 2px ${colors.brand}`,
+            }}
+          />
+        ) : (
+          <Typography variant="body2" fontWeight={500} noWrap sx={{ minWidth: 0 }}>
+            {task.title}
+          </Typography>
+        )}
+        {canUpdate && !renaming ? (
+          <Stack
+            direction="row"
+            spacing={0}
+            className="row-actions"
+            sx={{ opacity: 0, transition: 'opacity 120ms', flexShrink: 0 }}
+          >
+            <Tooltip title="Rename">
+              <IconButton
+                size="small"
+                aria-label={`Rename ${task.title}`}
+                onClick={(event) => {
+                  stop(event)
+                  setDraft(task.title)
+                  setRenaming(true)
+                }}
+                sx={{ p: 0.375 }}
+              >
+                <TextCursorInput size={14} strokeWidth={1.75} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                aria-label={`Edit ${task.title}`}
+                onClick={(event) => {
+                  stop(event)
+                  onEdit?.(task)
+                }}
+                sx={{ p: 0.375 }}
+              >
+                <Pencil size={14} strokeWidth={1.75} />
+              </IconButton>
+            </Tooltip>
+          </Stack>
+        ) : null}
 
         {task.description ? (
           <Tooltip title="Has a description">
@@ -141,13 +248,21 @@ const TaskRow = ({ task, columns, canMove, onOpenTask, onChanged }) => {
           </Tooltip>
         ) : null}
         {task.attachmentCount > 0 ? (
-          <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', color: colors.textSecondary, flexShrink: 0 }}>
+          <Stack
+            direction="row"
+            spacing={0.25}
+            sx={{ alignItems: 'center', color: colors.textSecondary, flexShrink: 0 }}
+          >
             <Paperclip size={12} strokeWidth={1.75} aria-hidden="true" />
             <Typography variant="caption">{task.attachmentCount}</Typography>
           </Stack>
         ) : null}
         {task.commentCount > 0 ? (
-          <Stack direction="row" spacing={0.25} sx={{ alignItems: 'center', color: colors.textSecondary, flexShrink: 0 }}>
+          <Stack
+            direction="row"
+            spacing={0.25}
+            sx={{ alignItems: 'center', color: colors.textSecondary, flexShrink: 0 }}
+          >
             <MessageSquare size={12} strokeWidth={1.75} aria-hidden="true" />
             <Typography variant="caption">{task.commentCount}</Typography>
           </Stack>
@@ -212,7 +327,10 @@ export const ListView = ({ board, loading, onOpenTask, onAddTask, onChanged }) =
   const { can } = usePermissions()
   const { columns } = useWorkspace()
   const canMove = can(PERMISSIONS.TASK_MOVE)
-  const canCreate = can(PERMISSIONS.TASK_CREATE)
+  const canUpdate = can(PERMISSIONS.TASK_UPDATE)
+  const { canEditTask, canCreateAnywhere } = useAccess()
+  const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
+  const [editingTaskId, setEditingTaskId] = useState(null)
 
   const [collapsed, setCollapsed] = useState({})
 
@@ -302,16 +420,35 @@ export const ListView = ({ board, loading, onOpenTask, onAddTask, onChanged }) =
                   <Typography sx={{ ...HEAD_CELL, justifySelf: 'end' }}>Pts</Typography>
                 </Box>
 
-                {column.tasks.map((task) => (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    columns={columns}
-                    canMove={canMove}
-                    onOpenTask={onOpenTask}
-                    onChanged={onChanged}
-                  />
-                ))}
+                {column.tasks.map((task) =>
+                  editingTaskId === task.id ? (
+                    <Box
+                      key={task.id}
+                      sx={{ p: 1.5, borderBottom: `1px solid ${colors.border}`, bgcolor: colors.page }}
+                    >
+                      <QuickAddCard
+                        column={column}
+                        task={task}
+                        onCancel={() => setEditingTaskId(null)}
+                        onSaved={() => {
+                          setEditingTaskId(null)
+                          onChanged?.()
+                        }}
+                      />
+                    </Box>
+                  ) : (
+                    <TaskRow
+                      key={task.id}
+                      task={task}
+                      columns={columns}
+                      canMove={canMove && canEditTask(task)}
+                      canUpdate={canUpdate && canEditTask(task)}
+                      onOpenTask={onOpenTask}
+                      onChanged={onChanged}
+                      onEdit={(target) => setEditingTaskId(target.id)}
+                    />
+                  ),
+                )}
 
                 {column.tasks.length === 0 ? (
                   <Typography variant="caption" component="p" sx={{ px: 2, py: 1.5, color: colors.textSecondary }}>

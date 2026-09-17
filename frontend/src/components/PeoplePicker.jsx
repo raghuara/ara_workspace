@@ -4,7 +4,7 @@ import { UserAvatar } from './UserAvatar'
 import { colors } from '@/theme/tokens'
 
 const matches = (option, needle) =>
-  [option.fullName, option.employeeId, option.department, option.designation]
+  [option.fullName, option.employeeId, option.department, option.designation, option.workspaceName]
     .filter(Boolean)
     .some((text) => text.toLowerCase().includes(needle))
 
@@ -53,7 +53,9 @@ export const PeoplePicker = ({
                 {option.fullName}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                {[option.employeeId, option.department, option.designation].filter(Boolean).join(' · ')}
+                {[option.employeeId, option.department, option.designation, option.workspaceName]
+                  .filter(Boolean)
+                  .join(' · ')}
               </Typography>
             </Box>
             {!multiple && isSelected ? (

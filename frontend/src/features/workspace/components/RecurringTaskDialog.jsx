@@ -22,6 +22,7 @@ import { FEATURES } from '@/constants/features'
 import { useFeatures } from '@/hooks/useFeatures'
 import { useSubmit } from '@/hooks/useSubmit'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import { useAccess } from '@/hooks/useAccess'
 import { colors } from '@/theme/tokens'
 import { isScheduleComplete, normaliseSchedule, todayIso } from '@/utils/recurrence'
 import { SchedulePicker } from './SchedulePicker'
@@ -70,16 +71,21 @@ const validate = (values) => {
   if (values.assigneeIds.length === 0) errors.assigneeIds = 'Assign at least one person.'
   if (!isScheduleComplete(values.schedule)) {
     errors.schedule =
-      values.schedule.frequency === RECURRENCE.MONTHLY ? 'Pick at least one date of the month.' : 'Pick at least one day of the week.'
+      values.schedule.frequency === RECURRENCE.MONTHLY
+        ? 'Pick at least one date of the month.'
+        : 'Pick at least one day of the week.'
   }
   if (!values.startDate) errors.startDate = 'Pick a start date.'
-  if (values.endDate && values.startDate && values.endDate < values.startDate) errors.endDate = 'The end date must be after the start.'
+  if (values.endDate && values.startDate && values.endDate < values.startDate)
+    errors.endDate = 'The end date must be after the start.'
   return errors
 }
 
 export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClose, onSaved }) => {
   const isEditing = Boolean(rule)
-  const { groups, teams, clients, assignableMembers, activeWorkspaceId } = useWorkspace()
+  const { clients, assignableMembers, activeWorkspaceId } = useWorkspace()
+  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam } = useAccess()
+  const groups = groupOptions(rule?.groupId ?? null)
   const { isEnabled } = useFeatures()
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
 
@@ -87,8 +93,10 @@ export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClo
     title: rule?.title ?? '',
     description: rule?.description ?? '',
     clientId: rule?.clientId ?? '',
-    groupId: rule?.groupId ?? defaultGroupId ?? '',
-    teamId: rule?.teamId ?? defaultTeamId ?? '',
+    groupId:
+      rule?.groupId ??
+      (groups.some((item) => item.id === defaultGroupId) ? defaultGroupId : groups.length === 1 ? groups[0].id : ''),
+    teamId: rule?.teamId ?? (groups.some((item) => item.id === defaultGroupId) ? (defaultTeamId ?? '') : ''),
     priority: rule?.priority ?? PRIORITIES.NORMAL,
     sizeKey: rule?.sizeKey ?? 'M',
     assigneeIds: rule?.assigneeIds ?? [],
@@ -105,9 +113,10 @@ export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClo
   )
 
   const teamOptions = useMemo(
-    () => (values.groupId ? teams.filter((team) => team.groupId === values.groupId) : teams),
-    [teams, values.groupId],
+    () => (values.groupId ? teamOptionsFor(values.groupId, rule?.teamId ?? null) : []),
+    [teamOptionsFor, values.groupId, rule],
   )
+  const noTeamAllowed = allowsNoTeam(values.groupId) || (rule && rule.groupId === values.groupId && !rule.teamId)
 
   const setField = (field) => (event) => {
     setValues((current) => ({ ...current, [field]: event.target.value }))
@@ -170,14 +179,34 @@ export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClo
         <DialogContent dividers>
           {error ? (
             <Alert severity="error" sx={{ mb: 2 }}>
-              {isForbidden(error) ? 'You do not have permission to manage recurring tasks here.' : (error.message ?? 'The recurring task could not be saved.')}
+              {isForbidden(error)
+                ? 'You do not have permission to manage recurring tasks here.'
+                : (error.message ?? 'The recurring task could not be saved.')}
             </Alert>
           ) : null}
 
           <Section step={1} title="What needs doing" hint="This is the task that will be created each time.">
-            <TextField {...fieldProps('title', 'Task title', { required: true, autoFocus: !isEditing, placeholder: 'e.g. Post the daily social media update' })} />
-            <TextField {...fieldProps('description', 'Description', { multiline: true, minRows: 2, placeholder: 'Checklist, links, or anything the person needs each time' })} />
-            <Box sx={{ display: 'grid', gap: 1.5, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' } }}>
+            <TextField
+              {...fieldProps('title', 'Task title', {
+                required: true,
+                autoFocus: !isEditing,
+                placeholder: 'e.g. Post the daily social media update',
+              })}
+            />
+            <TextField
+              {...fieldProps('description', 'Description', {
+                multiline: true,
+                minRows: 2,
+                placeholder: 'Checklist, links, or anything the person needs each time',
+              })}
+            />
+            <Box
+              sx={{
+                display: 'grid',
+                gap: 1.5,
+                gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+              }}
+            >
               <TextField {...fieldProps('clientId', 'Client', { select: true, required: true })}>
                 {clients.map((client) => (
                   <MenuItem key={client.id} value={client.id}>
@@ -199,7 +228,7 @@ export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClo
                 ))}
               </TextField>
               <TextField {...fieldProps('teamId', 'Team', { select: true })}>
-                <MenuItem value="">No specific team</MenuItem>
+                {noTeamAllowed ? <MenuItem value="">No specific team</MenuItem> : null}
                 {teamOptions.map((team) => (
                   <MenuItem key={team.id} value={team.id}>
                     {team.name}
@@ -215,7 +244,10 @@ export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClo
               </TextField>
             </Box>
             {weightageOn ? (
-              <SizePicker value={values.sizeKey} onChange={(sizeKey) => setValues((current) => ({ ...current, sizeKey }))} />
+              <SizePicker
+                value={values.sizeKey}
+                onChange={(sizeKey) => setValues((current) => ({ ...current, sizeKey }))}
+              />
             ) : null}
           </Section>
 
@@ -269,7 +301,12 @@ export const RecurringTaskDialog = ({ rule, defaultGroupId, defaultTeamId, onClo
 
           <Section step={3} title="When it repeats" hint="Choose the days of the week, or fixed dates each month.">
             <SchedulePicker
-              value={{ schedule: values.schedule, dueOffsetDays: values.dueOffsetDays, startDate: values.startDate, endDate: values.endDate }}
+              value={{
+                schedule: values.schedule,
+                dueOffsetDays: values.dueOffsetDays,
+                startDate: values.startDate,
+                endDate: values.endDate,
+              }}
               onChange={(next) => {
                 setValues((current) => ({ ...current, ...next }))
                 setErrors((current) => ({ ...current, schedule: undefined, startDate: undefined, endDate: undefined }))

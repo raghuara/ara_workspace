@@ -2,6 +2,7 @@ const taskModel = require("../models/task.model");
 const workspaceModel = require("../models/workspace.model");
 const { runRecurringTasks } = require("../services/recurring.service");
 const notifications = require("../services/notification.service");
+const access = require("../services/access.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
 const { PRIORITIES, TASK_SIZES, USER_TYPE } = require("../constants/workspace");
@@ -100,24 +101,18 @@ const ensureWorkspaceAccess = async (req, res, workspaceId) => {
   return true;
 };
 
-const visibilityFor = async (req, workspaceId) => {
-  if (can(req, "task.view.all")) return null;
-  const scope = await workspaceModel.findMemberScope(workspaceId, req.user.employeeId);
-  return {
-    employeeId: req.user.employeeId,
-    teamIds: scope === "own" ? [] : await taskModel.findTeamIdsForEmployee(req.user.employeeId)
-  };
-};
+const visibilityFor = async (req, workspaceId) => access.visibilityFilter(await access.resolveScopes(req, workspaceId));
 
-const canAccessTask = async (req, task) => {
-  const visibility = await visibilityFor(req, task.workspaceId);
-  if (!visibility) return true;
-  if (task.assigneeIds.includes(visibility.employeeId)) return true;
-  return Boolean(task.teamId) && visibility.teamIds.includes(task.teamId);
+const canAccessTask = async (req, task, { write = false } = {}) => {
+  const scopes = await access.resolveScopes(req, task.workspaceId);
+  return write ? access.canEditTask(scopes, task) : access.canViewTask(scopes, task);
 };
 
 const outsideScope = (res) =>
-  res.status(403).json({ message: "You can only work on tasks assigned to you or your team.", code: "FORBIDDEN" });
+  res.status(403).json({ message: "You do not have access to this task. Ask your workspace admin for access to its group or team.", code: "FORBIDDEN" });
+
+const viewOnly = (res) =>
+  res.status(403).json({ message: "You have view-only access here. Ask your workspace admin for edit access.", code: "FORBIDDEN" });
 
 const cannotAssign = (res) =>
   res.status(403).json({ message: "You do not have permission to assign tasks.", code: "FORBIDDEN" });
@@ -280,6 +275,10 @@ const createTask = async (req, res) => {
   const { errors, changes } = await validateTaskFields(req.body, workspaceId);
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
 
+  const scopes = await access.resolveScopes(req, workspaceId);
+  const target = { groupId: changes.groupId ?? null, teamId: changes.teamId ?? null, assigneeIds: [] };
+  if (!access.canEditTask(scopes, target)) return viewOnly(res);
+
   const sizeKey = changes.sizeKey ?? "M";
   const assigneeIds = can(req, "task.assign") ? (changes.assigneeIds ?? []) : [req.user.employeeId];
 
@@ -330,6 +329,7 @@ const updateTask = async (req, res) => {
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
   if (!(await canAccessTask(req, existing))) return outsideScope(res);
+  if (!(await canAccessTask(req, existing, { write: true }))) return viewOnly(res);
 
   const { errors, changes } = await validateTaskFields(req.body, existing.workspaceId, existing);
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
@@ -374,6 +374,7 @@ const moveTask = async (req, res) => {
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
   if (!(await canAccessTask(req, existing))) return outsideScope(res);
+  if (!(await canAccessTask(req, existing, { write: true }))) return viewOnly(res);
 
   const statusId = text(req.body.statusId);
   const to = statusId ? await workspaceModel.findColumnById(statusId) : null;
@@ -423,6 +424,7 @@ const deleteTask = async (req, res) => {
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
   if (!(await canAccessTask(req, existing))) return outsideScope(res);
+  if (!(await canAccessTask(req, existing, { write: true }))) return viewOnly(res);
 
   await withTransaction(async (connection) => {
     await taskModel.insertHistory(

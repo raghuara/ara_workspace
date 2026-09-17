@@ -30,9 +30,25 @@ export const StatCard = ({
         flexDirection: 'column',
         p: dense ? { xs: 1.25, md: 1.5 } : { xs: 1.5, md: 1.75 },
         borderRadius: 2.5,
-        bgcolor: colors.surface,
-        border: `1px solid ${colors.border}`,
+        position: 'relative',
+        overflow: 'hidden',
+        background: `linear-gradient(135deg, ${palette.soft} 0%, ${palette.tint} 100%)`,
+        border: `1px solid ${palette.border}`,
         boxShadow: '0 1px 2px rgba(15, 23, 42, 0.04)',
+        transition: 'transform 140ms ease, box-shadow 140ms ease',
+        '&:hover': { transform: 'translateY(-1px)', boxShadow: `0 6px 16px -8px ${palette.strong}55` },
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          right: -28,
+          bottom: -34,
+          width: 96,
+          height: 96,
+          borderRadius: '50%',
+          bgcolor: palette.strong,
+          opacity: 0.06,
+          pointerEvents: 'none',
+        },
       }}
     >
       <Stack direction="row" spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: 'flex-start', flex: 1 }}>
@@ -88,9 +104,10 @@ export const StatCard = ({
               display: 'grid',
               placeItems: 'center',
               flexShrink: 0,
-              bgcolor: palette.soft,
+              bgcolor: colors.surface,
               color: palette.strong,
               border: `1px solid ${palette.border}`,
+              boxShadow: '0 1px 2px rgba(15, 23, 42, 0.06)',
             }}
           >
             <Icon size={dense ? 16 : 18} strokeWidth={1.75} />
@@ -105,7 +122,7 @@ export const StatCard = ({
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(progress)}
-          sx={{ mt: dense ? 1.125 : 1.375, height: 4, borderRadius: 999, bgcolor: colors.neutralSoft, overflow: 'hidden' }}
+          sx={{ mt: dense ? 1.125 : 1.375, height: 4, borderRadius: 999, bgcolor: `${palette.strong}22`, overflow: 'hidden' }}
         >
           <Box
             sx={{

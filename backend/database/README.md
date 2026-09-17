@@ -15,6 +15,9 @@ Run the files in `migrations/` **in numeric order** on an empty `ara_workspace` 
 10_schema_member_task_scope.sql  per-member task visibility
 11_schema_notifications.sql    in-app notifications
 12_schema_designations.sql     designations (+ seed from employees)
+13_schema_performance.sql      performance reviews and goals
+14_schema_entities_access.sql  workspace = company: employees/catalogs per workspace, workspace_access grants
+15_schema_account_manage.sql   account.manage permission; Admin can onboard staff and create logins
 ```
 
 Then create the first login:

@@ -2,6 +2,7 @@ const recurringModel = require("../models/recurring.model");
 const taskModel = require("../models/task.model");
 const workspaceModel = require("../models/workspace.model");
 const { runRecurringTasks, scheduleOf } = require("../services/recurring.service");
+const access = require("../services/access.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
 const { normaliseSchedule, isScheduleComplete, nextOccurrences, todayIso } = require("../utils/recurrence");
@@ -17,6 +18,10 @@ const badRequest = (res, message, errors) =>
   res.status(400).json({ message, code: errors ? "VALIDATION_ERROR" : "BAD_REQUEST", ...(errors && { errors }) });
 const notFound = (res, message = "That recurring task does not exist.") => res.status(404).json({ message, code: "NOT_FOUND" });
 const forbidden = (res) => res.status(403).json({ message: "You do not have access to this workspace.", code: "FORBIDDEN" });
+const viewOnly = (res) =>
+  res.status(403).json({ message: "You can view this group, but you cannot change its recurring tasks.", code: "FORBIDDEN" });
+const outsideScope = (res) =>
+  res.status(403).json({ message: "This recurring task is outside the groups and teams you can access.", code: "FORBIDDEN" });
 
 const nextRunFor = (rule) => {
   if (!rule.is_active) return null;
@@ -130,7 +135,13 @@ const listRules = async (req, res) => {
   if (!(await ensureAccess(req, res, workspaceId))) return;
 
   await runRecurringTasks(workspaceId);
-  res.json(await withAssignees(await recurringModel.findRulesByWorkspace(workspaceId)));
+  const scopes = await access.resolveScopes(req, workspaceId);
+  const rules = await withAssignees(await recurringModel.findRulesByWorkspace(workspaceId));
+  res.json(
+    rules
+      .filter((rule) => access.canViewTask(scopes, rule))
+      .map((rule) => ({ ...rule, canEdit: access.canEditTask(scopes, rule) }))
+  );
 };
 
 const getRule = async (req, res) => {
@@ -138,7 +149,22 @@ const getRule = async (req, res) => {
   if (!rule) return notFound(res);
   if (!(await ensureAccess(req, res, rule.workspaceId))) return;
 
-  res.json(rule);
+  const scopes = await access.resolveScopes(req, rule.workspaceId);
+  if (!access.canViewTask(scopes, rule)) return outsideScope(res);
+  res.json({ ...rule, canEdit: access.canEditTask(scopes, rule) });
+};
+
+const ensureEditable = async (req, res, rule) => {
+  const scopes = await access.resolveScopes(req, rule.workspaceId);
+  if (!access.canViewTask(scopes, rule)) {
+    outsideScope(res);
+    return false;
+  }
+  if (!access.canEditTask(scopes, rule)) {
+    viewOnly(res);
+    return false;
+  }
+  return true;
 };
 
 const createRule = async (req, res) => {
@@ -147,6 +173,7 @@ const createRule = async (req, res) => {
 
   const { errors, data } = await validateRule(req.body, workspaceId);
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
+  if (!(await ensureEditable(req, res, { ...data, workspaceId, assigneeIds: [] }))) return;
 
   const ruleId = await withTransaction(async (connection) => {
     const id = await nextId("RCR", connection);
@@ -164,8 +191,11 @@ const updateRule = async (req, res) => {
   if (!existing) return notFound(res);
   if (!(await ensureAccess(req, res, existing.workspaceId))) return;
 
+  if (!(await ensureEditable(req, res, existing))) return;
+
   const { errors, data } = await validateRule({ ...existing, ...req.body }, existing.workspaceId);
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
+  if (!(await ensureEditable(req, res, { ...data, workspaceId: existing.workspaceId, assigneeIds: [] }))) return;
 
   await withTransaction(async (connection) => {
     await recurringModel.updateRule(existing.id, data, connection);
@@ -179,6 +209,7 @@ const setStatus = async (req, res) => {
   const existing = await loadOne(req.params.ruleId);
   if (!existing) return notFound(res);
   if (!(await ensureAccess(req, res, existing.workspaceId))) return;
+  if (!(await ensureEditable(req, res, existing))) return;
 
   await recurringModel.setActive(existing.id, Boolean(req.body.isActive));
   if (req.body.isActive) await runRecurringTasks(existing.workspaceId);
@@ -189,6 +220,7 @@ const deleteRule = async (req, res) => {
   const existing = await loadOne(req.params.ruleId);
   if (!existing) return notFound(res);
   if (!(await ensureAccess(req, res, existing.workspaceId))) return;
+  if (!(await ensureEditable(req, res, existing))) return;
 
   await recurringModel.deleteRule(existing.id);
   res.json({ id: existing.id });

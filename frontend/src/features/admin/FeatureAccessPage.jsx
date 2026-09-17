@@ -78,7 +78,7 @@ export const FeatureAccessPage = () => {
       <PageHeader
         title="Feature Access"
         description="Switch modules on and off for the whole organisation. Turning one off hides its navigation and blocks its routes — nothing is deleted."
-        breadcrumbs={[{ label: 'Administration' }, { label: 'Feature Access' }]}
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Access' }, { label: 'Feature Access' }]}
       />
 
       {error ? (

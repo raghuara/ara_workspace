@@ -4,6 +4,8 @@ const EMPLOYEE_SELECT = `
   SELECT
     e.id,
     e.employee_id,
+    e.workspace_id,
+    w.name AS workspace_name,
     e.first_name,
     e.last_name,
     e.email,
@@ -18,11 +20,23 @@ const EMPLOYEE_SELECT = `
     CONCAT(m.first_name, ' ', m.last_name) AS reporting_manager
   FROM employees e
   LEFT JOIN employees m ON m.employee_id = e.reporting_manager_id
+  LEFT JOIN workspaces w ON w.id = e.workspace_id
 `;
 
-const buildFilters = ({ search, department, status }) => {
+const buildFilters = ({ search, department, status, workspaceId, workspaceIds }) => {
   const clauses = [];
   const params = [];
+
+  if (workspaceId) {
+    clauses.push("e.workspace_id = ?");
+    params.push(workspaceId);
+  } else if (workspaceIds) {
+    if (workspaceIds.length === 0) clauses.push("1 = 0");
+    else {
+      clauses.push("e.workspace_id IN (?)");
+      params.push(workspaceIds);
+    }
+  }
 
   if (search) {
     const term = `%${search}%`;
@@ -51,8 +65,8 @@ const buildFilters = ({ search, department, status }) => {
   };
 };
 
-const findAllEmployees = async ({ search, department, status, page, pageSize }) => {
-  const { where, params } = buildFilters({ search, department, status });
+const findAllEmployees = async ({ search, department, status, workspaceId, workspaceIds, page, pageSize }) => {
+  const { where, params } = buildFilters({ search, department, status, workspaceId, workspaceIds });
   const offset = (page - 1) * pageSize;
 
   const [[{ total }]] = await pool.query(
@@ -92,14 +106,15 @@ const nextEmployeeId = async () => {
   return `EMP-${String(next).padStart(4, "0")}`;
 };
 
-const createEmployee = async (employee) => {
-  await pool.query(
+const insertEmployee = async (employee, connection = pool) => {
+  await connection.query(
     `INSERT INTO employees
-       (employee_id, first_name, last_name, email, phone, department, designation,
+       (employee_id, workspace_id, first_name, last_name, email, phone, department, designation,
         joining_date, status, employment_type, work_location, reporting_manager_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       employee.employeeId,
+      employee.workspaceId,
       employee.firstName,
       employee.lastName,
       employee.email,
@@ -113,18 +128,39 @@ const createEmployee = async (employee) => {
       employee.reportingManagerId
     ]
   );
+};
 
+const createEmployee = async (employee) => {
+  await insertEmployee(employee);
   return findEmployeeById(employee.employeeId);
+};
+
+const findByEmails = async (emails) => {
+  if (emails.length === 0) return [];
+  const [rows] = await pool.query("SELECT employee_id, email, workspace_id FROM employees WHERE email IN (?)", [emails]);
+  return rows;
+};
+
+const maxEmployeeNumber = async (connection = pool) => {
+  const [[{ max_num }]] = await connection.query(
+    "SELECT MAX(CAST(SUBSTRING(employee_id, 5) AS UNSIGNED)) AS max_num FROM employees FOR UPDATE"
+  );
+  return max_num || 0;
+};
+
+const setReportingManager = async (employeeId, managerId, connection = pool) => {
+  await connection.query("UPDATE employees SET reporting_manager_id = ? WHERE employee_id = ?", [managerId, employeeId]);
 };
 
 const updateEmployee = async (employeeId, employee) => {
   await pool.query(
     `UPDATE employees
-     SET first_name = ?, last_name = ?, email = ?, phone = ?, department = ?,
+     SET workspace_id = ?, first_name = ?, last_name = ?, email = ?, phone = ?, department = ?,
          designation = ?, joining_date = ?, status = ?, employment_type = ?,
          work_location = ?, reporting_manager_id = ?
      WHERE employee_id = ?`,
     [
+      employee.workspaceId,
       employee.firstName,
       employee.lastName,
       employee.email,
@@ -149,5 +185,9 @@ module.exports = {
   findDirectReports,
   nextEmployeeId,
   createEmployee,
+  insertEmployee,
+  findByEmails,
+  maxEmployeeNumber,
+  setReportingManager,
   updateEmployee
 };

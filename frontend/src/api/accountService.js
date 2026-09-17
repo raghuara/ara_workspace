@@ -3,7 +3,12 @@ import { apiRequest, toQueryString } from './httpClient'
 const id = (value) => encodeURIComponent(value)
 
 export const accountService = {
-  listAccounts: ({ search } = {}) => apiRequest(`/admin/accounts${toQueryString({ search })}`),
+  listAccounts: ({ search, workspaceId } = {}) =>
+    apiRequest(`/admin/accounts${toQueryString({ search, workspaceId })}`),
+
+  listUserTypes: () => apiRequest('/admin/accounts/user-types'),
+
+  getAccount: (employeeId) => apiRequest(`/admin/accounts/${id(employeeId)}`),
 
   createAccount: (payload) => apiRequest('/admin/accounts', { method: 'POST', body: payload }),
 

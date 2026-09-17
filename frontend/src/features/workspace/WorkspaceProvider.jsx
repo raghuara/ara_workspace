@@ -22,7 +22,7 @@ const storeWorkspace = (workspaceId) => {
   }
 }
 
-const EMPTY_DETAIL = { structure: { groups: [], members: [] }, columns: [], clients: [] }
+const EMPTY_DETAIL = { structure: { groups: [], members: [], access: { admin: false, workspace: 'none' } }, columns: [], clients: [] }
 
 /** Pure fetch — returns data instead of writing state, so callers control timing. */
 const fetchDetail = async (workspaceId) => {
@@ -133,6 +133,7 @@ export const WorkspaceProvider = ({ children }) => {
       activeWorkspace: workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
       groups: detail.structure.groups,
       members: detail.structure.members,
+      access: detail.structure.access ?? { admin: false, workspace: 'none' },
       columns: detail.columns,
       clients: detail.clients,
       teams,

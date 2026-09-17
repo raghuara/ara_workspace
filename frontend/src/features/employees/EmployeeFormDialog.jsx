@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import {
   Alert,
   Box,
@@ -7,16 +7,19 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  LinearProgress,
   MenuItem,
   TextField,
   Typography,
 } from '@mui/material'
+import { CircleCheck } from 'lucide-react'
 import { departmentService, designationService } from '@/api/catalogService'
 import { employeeService } from '@/api/employeeService'
 import { isForbidden } from '@/api/httpClient'
 import { EMPLOYMENT_STATUS, EMPLOYMENT_TYPES, WORK_LOCATIONS } from '@/constants/domain'
 import { useAsync } from '@/hooks/useAsync'
 import { useSubmit } from '@/hooks/useSubmit'
+import { useWorkspace } from '@/hooks/useWorkspace'
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/
 const STATUS_OPTIONS = Object.values(EMPLOYMENT_STATUS)
@@ -73,10 +76,25 @@ const EmployeeForm = ({ employee, onClose, onSaved }) => {
   const isEditing = Boolean(employee)
   const [values, setValues] = useState(() => toForm(employee))
   const [errors, setErrors] = useState({})
+  const [saved, setSaved] = useState(null)
 
-  const { data: managerOptions } = useAsync(employeeService.getEmployeeOptions, [])
-  const { data: departments } = useAsync(departmentService.list, [{ activeOnly: true }])
-  const { data: designations } = useAsync(designationService.list, [{ activeOnly: true }])
+  useEffect(() => {
+    if (!saved) return undefined
+    const timer = setTimeout(() => onSaved(saved), 900)
+    return () => clearTimeout(timer)
+  }, [saved, onSaved])
+
+  const { activeWorkspaceId, activeWorkspace } = useWorkspace()
+  const workspaceId = employee?.workspaceId ?? activeWorkspaceId
+  const { data: managerOptions } = useAsync(employeeService.getEmployeeOptions, [workspaceId], {
+    enabled: Boolean(workspaceId),
+  })
+  const { data: departments } = useAsync(departmentService.list, [{ workspaceId, activeOnly: true }], {
+    enabled: Boolean(workspaceId),
+  })
+  const { data: designations } = useAsync(designationService.list, [{ workspaceId, activeOnly: true }], {
+    enabled: Boolean(workspaceId),
+  })
 
   const { submit, submitting, error, reset } = useSubmit((payload) =>
     isEditing ? employeeService.updateEmployee(employee.id, payload) : employeeService.createEmployee(payload),
@@ -102,6 +120,7 @@ const EmployeeForm = ({ employee, onClose, onSaved }) => {
 
     const payload = {
       ...values,
+      workspaceId,
       firstName: values.firstName.trim(),
       lastName: values.lastName.trim(),
       email: values.email.trim(),
@@ -110,10 +129,11 @@ const EmployeeForm = ({ employee, onClose, onSaved }) => {
       reportingManagerId: values.reportingManagerId || undefined,
     }
 
-    const saved = await submit(payload)
-    if (saved) {
+    const result = await submit(payload)
+    if (result) {
       setErrors({})
-      onSaved(saved)
+      if (isEditing) onSaved(result)
+      else setSaved(result)
     }
   }
 
@@ -133,10 +153,30 @@ const EmployeeForm = ({ employee, onClose, onSaved }) => {
 
   const managers = (managerOptions ?? []).filter((option) => option.id !== employee?.id)
 
+  if (saved) {
+    return (
+      <Box sx={{ px: 3, py: 5, textAlign: 'center' }}>
+        <CircleCheck size={44} strokeWidth={1.5} color="#15803D" aria-hidden="true" />
+        <Typography variant="h3" sx={{ mt: 1.5 }}>
+          {saved.fullName} has been onboarded
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, mb: 3 }}>
+          {saved.employeeId} · {saved.designation} · {saved.department}
+        </Typography>
+        <LinearProgress sx={{ maxWidth: 280, mx: 'auto', borderRadius: 999 }} />
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          Opening profile…
+        </Typography>
+      </Box>
+    )
+  }
+
   return (
     <Box component="form" onSubmit={handleSubmit} noValidate>
       <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>
-        {isEditing ? `Edit ${employee.fullName}` : 'Onboard employee'}
+        {isEditing
+          ? `Edit ${employee.fullName}`
+          : `Onboard employee${activeWorkspace ? ` · ${activeWorkspace.name}` : ''}`}
       </DialogTitle>
       <DialogContent dividers>
         {error && !error.details ? (

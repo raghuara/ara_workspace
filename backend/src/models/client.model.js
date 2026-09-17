@@ -19,13 +19,19 @@ const CLIENT_SELECT = `
   FROM clients c
 `;
 
-const buildFilters = ({ workspaceId, search, status }) => {
+const buildFilters = ({ workspaceId, workspaceIds, search, status }) => {
   const clauses = [];
   const params = [];
 
   if (workspaceId) {
     clauses.push("c.workspace_id = ?");
     params.push(workspaceId);
+  } else if (Array.isArray(workspaceIds)) {
+    if (workspaceIds.length === 0) clauses.push("1 = 0");
+    else {
+      clauses.push("c.workspace_id IN (?)");
+      params.push(workspaceIds);
+    }
   }
 
   if (search) {
@@ -42,8 +48,8 @@ const buildFilters = ({ workspaceId, search, status }) => {
   return { where: clauses.length ? `WHERE ${clauses.join(" AND ")}` : "", params };
 };
 
-const findClients = async ({ workspaceId, search, status, page, pageSize }) => {
-  const { where, params } = buildFilters({ workspaceId, search, status });
+const findClients = async ({ workspaceId, workspaceIds, search, status, page, pageSize }) => {
+  const { where, params } = buildFilters({ workspaceId, workspaceIds, search, status });
   const offset = (page - 1) * pageSize;
 
   const [[{ total }]] = await pool.query(`SELECT COUNT(*) AS total FROM clients c ${where}`, params);
@@ -56,8 +62,8 @@ const findClients = async ({ workspaceId, search, status, page, pageSize }) => {
   return { rows, total };
 };
 
-const findClientOptions = async (workspaceId) => {
-  const { where, params } = buildFilters({ workspaceId });
+const findClientOptions = async (workspaceId, workspaceIds = null) => {
+  const { where, params } = buildFilters({ workspaceId, workspaceIds });
   const [rows] = await pool.query(`SELECT id, name, tone FROM clients c ${where} ORDER BY c.name`, params);
   return rows;
 };

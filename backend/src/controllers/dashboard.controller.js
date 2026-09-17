@@ -254,11 +254,14 @@ const summariseScope = (snapshot, directory, { groupId, teamId }) => {
   };
 };
 
+const isOrganisationWide = (req) => req.user.userTypeId === USER_TYPE.MASTER_ADMIN;
+
+const scopedWorkspaceIds = async (req) =>
+  isOrganisationWide(req) ? null : workspaceModel.findWorkspaceIdsForEmployee(req.user.employeeId);
+
 const getOverview = async (req, res) => {
-  const isOrganisationWide = req.user.userTypeId === USER_TYPE.MASTER_ADMIN;
-  const workspaceIds = isOrganisationWide
-    ? (await workspaceModel.findAllWorkspaces()).map((row) => row.id)
-    : await workspaceModel.findWorkspaceIdsForEmployee(req.user.employeeId);
+  const scope = await scopedWorkspaceIds(req);
+  const workspaceIds = scope ?? (await workspaceModel.findAllWorkspaces()).map((row) => row.id);
 
   const directory = await dashboardModel.findEmployeeDirectory();
   const workspaces = [];
@@ -286,11 +289,11 @@ const getOverview = async (req, res) => {
     );
 
   res.json({
-    isOrganisationWide,
+    isOrganisationWide: scope === null,
     workspaces,
     totals: {
       ...totals,
-      employees: await dashboardModel.countActiveEmployees(),
+      employees: await dashboardModel.countActiveEmployees(scope),
       assigned: assignedPeople.size
     }
   });
@@ -300,7 +303,7 @@ const getScopeSummary = async (req, res) => {
   const { workspaceId } = req.params;
   const snapshot = await dashboardModel.loadWorkspaceSnapshot(workspaceId);
   if (!snapshot) return notFound(res, "That workspace does not exist.");
-  if (req.user.userTypeId !== USER_TYPE.MASTER_ADMIN && !(await workspaceModel.isMember(workspaceId, req.user.employeeId))) {
+  if (!isOrganisationWide(req) && !(await workspaceModel.isMember(workspaceId, req.user.employeeId))) {
     return forbidden(res);
   }
 
@@ -315,7 +318,7 @@ const getScopeSummary = async (req, res) => {
 };
 
 const getEmployeeStats = async (req, res) => {
-  const { totals, departments } = await dashboardModel.findEmployeeStats();
+  const { totals, departments } = await dashboardModel.findEmployeeStats(await scopedWorkspaceIds(req));
   res.json({
     totalEmployees: Number(totals.active) || 0,
     newEmployees: Number(totals.new_joiners) || 0,
@@ -327,7 +330,7 @@ const getEmployeeStats = async (req, res) => {
 
 const getRecentEmployees = async (req, res) => {
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit, 10) || 6));
-  const rows = await dashboardModel.findRecentEmployees(limit);
+  const rows = await dashboardModel.findRecentEmployees(limit, await scopedWorkspaceIds(req));
   res.json(
     rows.map((row) => ({
       id: row.employee_id,

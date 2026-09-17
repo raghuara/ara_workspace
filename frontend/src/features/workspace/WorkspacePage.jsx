@@ -1,5 +1,17 @@
 import { useMemo, useState } from 'react'
-import { Box, Button, ButtonGroup, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tab, Tabs, Typography } from '@mui/material'
+import {
+  Box,
+  Button,
+  ButtonGroup,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Stack,
+  Tab,
+  Tabs,
+  Typography,
+} from '@mui/material'
 import { ChevronDown, Columns3, Info, LayoutList, Plus, Repeat, Settings2, Table2 } from 'lucide-react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
@@ -16,6 +28,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useFeatures } from '@/hooks/useFeatures'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import { useAccess } from '@/hooks/useAccess'
 import { colors, layout } from '@/theme/tokens'
 import { TaskFilterBar } from './components/TaskFilterBar'
 import { TaskFormDialog } from './components/TaskFormDialog'
@@ -49,6 +62,7 @@ export const WorkspacePage = () => {
   const navigate = useNavigate()
   const params = useParams()
   const { can } = usePermissions()
+  const { canCreateAnywhere } = useAccess()
   const { isEnabled } = useFeatures()
   const { activeWorkspace, activeWorkspaceId, groups, teams, refreshStructure } = useWorkspace()
 
@@ -76,11 +90,15 @@ export const WorkspacePage = () => {
     [filters, debouncedSearch, scope],
   )
 
-  const { data: board, loading, error, reload, setData: setBoard } = useAsync(
-    taskService.getBoard,
-    [activeWorkspaceId, query],
-    { enabled: Boolean(activeWorkspaceId) && Boolean(view) },
-  )
+  const {
+    data: board,
+    loading,
+    error,
+    reload,
+    setData: setBoard,
+  } = useAsync(taskService.getBoard, [activeWorkspaceId, query], {
+    enabled: Boolean(activeWorkspaceId) && Boolean(view),
+  })
 
   const group = groups.find((item) => item.id === scope.groupId) ?? null
   const team = teams.find((item) => item.id === scope.teamId) ?? null
@@ -137,9 +155,9 @@ export const WorkspacePage = () => {
   const title = team?.name ?? group?.name ?? activeWorkspace.name
   const description = team
     ? `${group?.name} · ${activeWorkspace.name} · lead ${team.leadName} · ${team.members.length} members`
-    : (group
-        ? `${activeWorkspace.name} · ${group.teams.length} teams · lead ${group.leadName}`
-        : activeWorkspace.description)
+    : group
+      ? `${activeWorkspace.name} · ${group.teams.length} teams · lead ${group.leadName}`
+      : activeWorkspace.description
   const detailsLabel = team ? 'Team details' : group ? 'Group details' : 'Workspace details'
 
   const breadcrumbs = [{ label: 'Work', to: workspaceViewPath(view) }]
@@ -161,16 +179,29 @@ export const WorkspacePage = () => {
         breadcrumbs={breadcrumbs}
         actions={
           <>
-            <Button variant="outlined" startIcon={<Info size={15} strokeWidth={2} />} onClick={() => setDetailsOpen(true)}>
+            <Button
+              variant="outlined"
+              startIcon={<Info size={15} strokeWidth={2} />}
+              onClick={() => setDetailsOpen(true)}
+            >
               {detailsLabel}
             </Button>
-            {can(PERMISSIONS.TASK_CREATE) ? (
+            {can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere ? (
               <ButtonGroup variant="contained" disableElevation aria-label="Add task">
-                <Button startIcon={<Plus size={16} strokeWidth={2} />} onClick={() => setTaskDialog({ open: true, task: null, statusId: null })}>
+                <Button
+                  startIcon={<Plus size={16} strokeWidth={2} />}
+                  onClick={() => setTaskDialog({ open: true, task: null, statusId: null })}
+                >
                   Add task
                 </Button>
                 {isEnabled(FEATURES.RECURRING_TASKS) ? (
-                  <Button size="small" aria-label="More ways to add" aria-haspopup="menu" onClick={(event) => setAddMenu(event.currentTarget)} sx={{ px: 0.75, minWidth: 0 }}>
+                  <Button
+                    size="small"
+                    aria-label="More ways to add"
+                    aria-haspopup="menu"
+                    onClick={(event) => setAddMenu(event.currentTarget)}
+                    sx={{ px: 0.75, minWidth: 0 }}
+                  >
                     <ChevronDown size={15} strokeWidth={2} />
                   </Button>
                 ) : null}
@@ -199,7 +230,11 @@ export const WorkspacePage = () => {
         </Stack>
       ) : null}
 
-      <ScopeStats summary={summary.data} loading={summary.loading && !summary.data} showPoints={isEnabled(FEATURES.WEIGHTAGE)} />
+      <ScopeStats
+        summary={summary.data}
+        loading={summary.loading && !summary.data}
+        showPoints={isEnabled(FEATURES.WEIGHTAGE)}
+      />
 
       <Stack
         direction={{ xs: 'column', md: 'row' }}
@@ -250,7 +285,6 @@ export const WorkspacePage = () => {
             loading={loading}
             scope={scope}
             onOpenTask={setSelectedTask}
-            onEditTask={(task) => setTaskDialog({ open: true, task, statusId: null })}
             onAddGroup={() => setGroupDialogOpen(true)}
             onChanged={refreshAll}
             onBoardChange={setBoard}
@@ -265,7 +299,9 @@ export const WorkspacePage = () => {
             onChanged={refreshAll}
           />
         ) : null}
-        {view === 'table' ? <TableView board={board} loading={loading} onOpenTask={setSelectedTask} /> : null}
+        {view === 'table' ? (
+          <TableView board={board} loading={loading} onOpenTask={setSelectedTask} onChanged={refreshAll} />
+        ) : null}
       </QueryStateView>
 
       {taskDialog.open ? (
@@ -291,23 +327,49 @@ export const WorkspacePage = () => {
         />
       ) : null}
 
-      <Menu open={Boolean(addMenu)} anchorEl={addMenu} onClose={() => setAddMenu(null)} anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }} transformOrigin={{ vertical: 'top', horizontal: 'right' }}>
-        <MenuItem onClick={() => { setAddMenu(null); setTaskDialog({ open: true, task: null, statusId: null }) }}>
-          <ListItemIcon><Plus size={15} strokeWidth={2} /></ListItemIcon>
+      <Menu
+        open={Boolean(addMenu)}
+        anchorEl={addMenu}
+        onClose={() => setAddMenu(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+      >
+        <MenuItem
+          onClick={() => {
+            setAddMenu(null)
+            setTaskDialog({ open: true, task: null, statusId: null })
+          }}
+        >
+          <ListItemIcon>
+            <Plus size={15} strokeWidth={2} />
+          </ListItemIcon>
           <ListItemText primary="New task" secondary="A one-off task on the board" />
         </MenuItem>
-        <MenuItem onClick={() => { setAddMenu(null); setRecurringOpen(true) }}>
-          <ListItemIcon><Repeat size={15} strokeWidth={2} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            setAddMenu(null)
+            setRecurringOpen(true)
+          }}
+        >
+          <ListItemIcon>
+            <Repeat size={15} strokeWidth={2} />
+          </ListItemIcon>
           <ListItemText primary="New recurring task" secondary="Repeats daily, on chosen days or monthly" />
         </MenuItem>
         <MenuItem component={Link} to={ROUTES.recurring} onClick={() => setAddMenu(null)}>
-          <ListItemIcon><Settings2 size={15} strokeWidth={2} /></ListItemIcon>
+          <ListItemIcon>
+            <Settings2 size={15} strokeWidth={2} />
+          </ListItemIcon>
           <ListItemText primary="Manage recurring tasks" />
         </MenuItem>
       </Menu>
 
       {recurringOpen ? (
-        <RecurringTaskDialog defaultGroupId={scope.groupId} defaultTeamId={scope.teamId} onClose={() => setRecurringOpen(false)} />
+        <RecurringTaskDialog
+          defaultGroupId={scope.groupId}
+          defaultTeamId={scope.teamId}
+          onClose={() => setRecurringOpen(false)}
+        />
       ) : null}
 
       {detailsOpen ? (

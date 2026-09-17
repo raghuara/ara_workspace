@@ -3,10 +3,6 @@ import {
   Alert,
   Box,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   IconButton,
   MenuItem,
   Stack,
@@ -21,7 +17,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Copy, KeyRound, ShieldCheck, UserPlus } from 'lucide-react'
+import { KeyRound, ShieldCheck, UserPlus } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SectionCard } from '@/components/SectionCard'
 import { SearchField } from '@/components/SearchField'
@@ -31,156 +27,30 @@ import { TableSkeleton } from '@/components/TableSkeleton'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { accountService } from '@/api/accountService'
-import { adminService } from '@/api/adminService'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useSession } from '@/hooks/useSession'
+import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 import { formatDate } from '@/utils/date'
+import { CreateLoginDialog, TemporaryPasswordDialog } from './LoginDialogs'
 
 const formatLastLogin = (iso) => (iso ? formatDate(iso.slice(0, 10)) : 'Never')
 
-const TemporaryPasswordDialog = ({ result, onClose }) => {
-  const [copied, setCopied] = useState(false)
-
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(result.temporaryPassword)
-      setCopied(true)
-    } catch {
-      setCopied(false)
-    }
-  }
-
-  return (
-    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
-      <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>Temporary password</DialogTitle>
-      <DialogContent dividers>
-        <Typography variant="body2" sx={{ mb: 1.5 }}>
-          Share this with <strong>{result.account.fullName}</strong>. It is shown only once — they will be asked to set
-          their own password at first sign-in.
-        </Typography>
-        <Stack spacing={1}>
-          <TextField label="Login email" value={result.account.email} size="small" fullWidth slotProps={{ input: { readOnly: true } }} />
-          <TextField
-            label="Temporary password"
-            value={result.temporaryPassword}
-            size="small"
-            fullWidth
-            slotProps={{
-              input: {
-                readOnly: true,
-                sx: { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', letterSpacing: '0.04em' },
-                endAdornment: (
-                  <Tooltip title={copied ? 'Copied' : 'Copy'}>
-                    <IconButton size="small" onClick={copy} aria-label="Copy temporary password">
-                      <Copy size={16} strokeWidth={1.75} />
-                    </IconButton>
-                  </Tooltip>
-                ),
-              },
-            }}
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions sx={{ px: 3, py: 1.5 }}>
-        <Button onClick={onClose} variant="contained">
-          Done
-        </Button>
-      </DialogActions>
-    </Dialog>
-  )
-}
-
-const CreateLoginDialog = ({ account, userTypes, onClose, onCreated }) => {
-  const [userTypeId, setUserTypeId] = useState(userTypes.find((type) => type.slug === 'employee')?.id ?? userTypes[0]?.id ?? '')
-  const [password, setPassword] = useState('')
-  const [errors, setErrors] = useState({})
-  const [error, setError] = useState('')
-  const [saving, setSaving] = useState(false)
-
-  const submit = async (event) => {
-    event.preventDefault()
-    setError('')
-    setSaving(true)
-    try {
-      const result = await accountService.createAccount({
-        employeeId: account.employeeId,
-        userTypeId,
-        password: password.trim() || undefined,
-      })
-      onCreated(result)
-    } catch (caught) {
-      if (caught.details) setErrors(caught.details)
-      else setError(caught.message ?? 'The login could not be created.')
-    } finally {
-      setSaving(false)
-    }
-  }
-
-  return (
-    <Dialog open onClose={saving ? undefined : onClose} maxWidth="xs" fullWidth>
-      <Box component="form" onSubmit={submit} noValidate>
-        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>Create login for {account.fullName}</DialogTitle>
-        <DialogContent dividers>
-          {error ? (
-            <Alert severity="error" sx={{ mb: 2 }}>
-              {error}
-            </Alert>
-          ) : null}
-          <Stack spacing={1.5} sx={{ pt: 0.5 }}>
-            <TextField label="Login email" value={account.email} size="small" fullWidth slotProps={{ input: { readOnly: true } }} helperText="Their work email." />
-            <TextField
-              select
-              label="User type"
-              value={userTypeId}
-              onChange={(event) => setUserTypeId(event.target.value)}
-              size="small"
-              fullWidth
-              required
-              error={Boolean(errors.userTypeId)}
-              helperText={errors.userTypeId ?? 'Decides what they can see and do.'}
-            >
-              {userTypes.map((type) => (
-                <MenuItem key={type.id} value={type.id}>
-                  {type.name}
-                </MenuItem>
-              ))}
-            </TextField>
-            <TextField
-              label="Temporary password"
-              value={password}
-              onChange={(event) => {
-                setPassword(event.target.value)
-                setErrors((current) => ({ ...current, password: undefined }))
-              }}
-              size="small"
-              fullWidth
-              error={Boolean(errors.password)}
-              helperText={errors.password ?? 'Leave blank to generate one automatically.'}
-            />
-          </Stack>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, py: 1.5 }}>
-          <Button onClick={onClose} variant="outlined" disabled={saving}>
-            Cancel
-          </Button>
-          <Button type="submit" variant="contained" disabled={saving}>
-            {saving ? 'Creating…' : 'Create login'}
-          </Button>
-        </DialogActions>
-      </Box>
-    </Dialog>
-  )
-}
-
 export const AccountsPage = () => {
   const { user } = useSession()
+  const { activeWorkspace, activeWorkspaceId } = useWorkspace()
   const [search, setSearch] = useState('')
   const debouncedSearch = useDebouncedValue(search, 300)
 
-  const accounts = useAsync(accountService.listAccounts, [{ search: debouncedSearch }])
-  const userTypes = useAsync(adminService.listUserTypes, [])
+  const accounts = useAsync(
+    accountService.listAccounts,
+    [{ search: debouncedSearch, workspaceId: activeWorkspaceId }],
+    {
+      enabled: Boolean(activeWorkspaceId),
+    },
+  )
+  const userTypes = useAsync(accountService.listUserTypes, [])
 
   const [creating, setCreating] = useState(null)
   const [revealed, setRevealed] = useState(null)
@@ -188,6 +58,7 @@ export const AccountsPage = () => {
   const [rowError, setRowError] = useState('')
 
   const typeOptions = useMemo(() => userTypes.data ?? [], [userTypes.data])
+  const typeIds = useMemo(() => new Set(typeOptions.map((type) => type.id)), [typeOptions])
 
   const summary = useMemo(() => {
     const rows = accounts.data ?? []
@@ -215,13 +86,18 @@ export const AccountsPage = () => {
     <Box sx={{ maxWidth: layout.contentMaxWidth, mx: 'auto', px: { xs: 2, md: 3, lg: 4 }, py: { xs: 3, md: 4 } }}>
       <PageHeader
         title="Accounts"
-        description={`${summary.withLogin} of ${summary.total} employees can sign in · ${summary.active} active`}
-        breadcrumbs={[{ label: 'Administration' }, { label: 'Accounts' }]}
+        description={`${activeWorkspace?.name ?? 'Workspace'} · ${summary.withLogin} of ${summary.total} people can sign in · ${summary.active} active`}
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Access' }, { label: 'Accounts' }]}
       />
 
       <SectionCard padded={false}>
         <Box sx={{ p: 2 }}>
-          <SearchField value={search} onChange={setSearch} label="Search employees" placeholder="Name, ID, email, department…" />
+          <SearchField
+            value={search}
+            onChange={setSearch}
+            label="Search people"
+            placeholder="Name, ID, email, department…"
+          />
         </Box>
         {rowError ? (
           <Alert severity="error" sx={{ mx: 2, mb: 2 }} onClose={() => setRowError('')}>
@@ -248,6 +124,8 @@ export const AccountsPage = () => {
                   {accounts.data?.map((row) => {
                     const isSelf = row.employeeId === user?.id
                     const busy = busyId === row.employeeId
+                    const locked = isSelf || busy || !row.canManage
+                    const typeKnown = typeIds.has(row.userTypeId)
                     return (
                       <TableRow key={row.employeeId} hover sx={{ opacity: row.hasAccount && !row.isActive ? 0.6 : 1 }}>
                         <TableCell>
@@ -257,13 +135,19 @@ export const AccountsPage = () => {
                               <Typography variant="body2" fontWeight={600} noWrap>
                                 {row.fullName}
                                 {isSelf ? (
-                                  <Typography component="span" variant="caption" color="text.secondary" sx={{ ml: 0.75 }}>
+                                  <Typography
+                                    component="span"
+                                    variant="caption"
+                                    color="text.secondary"
+                                    sx={{ ml: 0.75 }}
+                                  >
                                     (you)
                                   </Typography>
                                 ) : null}
                               </Typography>
                               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
                                 {row.employeeId} · {row.department} · {row.designation}
+                                {row.workspaceId ? '' : ' · Organisation'}
                               </Typography>
                             </Box>
                           </Stack>
@@ -274,15 +158,17 @@ export const AccountsPage = () => {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {row.hasAccount ? (
+                          {row.hasAccount && row.canManage && typeKnown ? (
                             <TextField
                               select
                               size="small"
                               value={row.userTypeId}
-                              disabled={isSelf || busy}
+                              disabled={locked}
                               onChange={(event) =>
                                 runRowAction(row.employeeId, () =>
-                                  accountService.updateAccount(row.employeeId, { userTypeId: Number(event.target.value) }),
+                                  accountService.updateAccount(row.employeeId, {
+                                    userTypeId: Number(event.target.value),
+                                  }),
                                 )
                               }
                               sx={{ minWidth: 160 }}
@@ -294,6 +180,8 @@ export const AccountsPage = () => {
                                 </MenuItem>
                               ))}
                             </TextField>
+                          ) : row.hasAccount ? (
+                            <ToneChip label={row.userTypeName} tone="violet" />
                           ) : (
                             <Typography variant="body2" color="text.secondary">
                               —
@@ -318,12 +206,24 @@ export const AccountsPage = () => {
                         </TableCell>
                         <TableCell align="right">
                           {row.hasAccount ? (
-                            <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end', alignItems: 'center' }}>
-                              <Tooltip title={isSelf ? "Use Change password in your profile menu" : "Reset password"}>
+                            <Stack
+                              direction="row"
+                              spacing={0.5}
+                              sx={{ justifyContent: 'flex-end', alignItems: 'center' }}
+                            >
+                              <Tooltip
+                                title={
+                                  isSelf
+                                    ? 'Use Change password in your profile menu'
+                                    : row.canManage
+                                      ? 'Reset password'
+                                      : 'This login has more access than you can manage'
+                                }
+                              >
                                 <span>
                                   <IconButton
                                     size="small"
-                                    disabled={busy || isSelf}
+                                    disabled={locked}
                                     aria-label={`Reset password for ${row.fullName}`}
                                     onClick={() =>
                                       runRowAction(row.employeeId, async () => {
@@ -341,13 +241,19 @@ export const AccountsPage = () => {
                                   <Switch
                                     size="small"
                                     checked={Boolean(row.isActive)}
-                                    disabled={isSelf || busy}
+                                    disabled={locked}
                                     onChange={(event) =>
                                       runRowAction(row.employeeId, () =>
-                                        accountService.updateAccount(row.employeeId, { isActive: event.target.checked }),
+                                        accountService.updateAccount(row.employeeId, {
+                                          isActive: event.target.checked,
+                                        }),
                                       )
                                     }
-                                    slotProps={{ input: { 'aria-label': `${row.isActive ? 'Deactivate' : 'Activate'} ${row.fullName}` } }}
+                                    slotProps={{
+                                      input: {
+                                        'aria-label': `${row.isActive ? 'Deactivate' : 'Activate'} ${row.fullName}`,
+                                      },
+                                    }}
                                   />
                                 </span>
                               </Tooltip>
@@ -372,7 +278,13 @@ export const AccountsPage = () => {
             </Table>
           </TableContainer>
           {!accounts.loading && accounts.data?.length === 0 ? (
-            <EmptyState icon={UserPlus} title="No employees found" description="Try a different search." />
+            <EmptyState
+              icon={UserPlus}
+              title="No people found"
+              description={
+                search ? 'Try a different search.' : 'Onboard employees first, then create their logins here.'
+              }
+            />
           ) : null}
         </QueryStateView>
       </SectionCard>
@@ -392,8 +304,9 @@ export const AccountsPage = () => {
 
       {revealed ? <TemporaryPasswordDialog result={revealed} onClose={() => setRevealed(null)} /> : null}
 
-      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, color: colors.textSecondary }}>
-        Logins use the employee's work email. Deactivating keeps the record but blocks sign-in.
+      <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: colors.textSecondary }}>
+        Logins use the employee's work email. Deactivating keeps the record but blocks sign-in. Switch workspace in the
+        header to manage another company.
       </Typography>
     </Box>
   )

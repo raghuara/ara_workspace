@@ -11,6 +11,7 @@ INSERT INTO departments (name) VALUES
   ('Engineering'),
   ('Product'),
   ('Design'),
+  
   ('Quality Assurance'),
   ('Human Resources'),
   ('Finance'),

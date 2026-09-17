@@ -12,16 +12,19 @@ export const WorkspaceSwitcher = () => {
   if (!activeWorkspace) return null
   const tone = STATUS_TONES[activeWorkspace.tone] ?? STATUS_TONES.blue
   const open = Boolean(anchor)
+  const single = workspaces.length <= 1
 
   return (
     <>
       <Box
         component="button"
         type="button"
-        onClick={(event) => setAnchor(event.currentTarget)}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label={`Workspace: ${activeWorkspace.name}. Switch workspace`}
+        onClick={single ? undefined : (event) => setAnchor(event.currentTarget)}
+        aria-haspopup={single ? undefined : 'menu'}
+        aria-expanded={single ? undefined : open}
+        aria-label={
+          single ? `Workspace: ${activeWorkspace.name}` : `Workspace: ${activeWorkspace.name}. Switch workspace`
+        }
         sx={{
           display: 'flex',
           alignItems: 'center',
@@ -33,12 +36,13 @@ export const WorkspaceSwitcher = () => {
           border: `1px solid ${open ? colors.brand : colors.border}`,
           borderRadius: 2,
           bgcolor: open ? colors.brandSoft : colors.surface,
-          cursor: 'pointer',
+          cursor: single ? 'default' : 'pointer',
           pl: 0.75,
           pr: 1,
           textAlign: 'left',
-          transition: 'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
-          '&:hover': { bgcolor: open ? colors.brandSoft : colors.neutralSoft },
+          transition:
+            'background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
+          '&:hover': { bgcolor: single ? colors.surface : open ? colors.brandSoft : colors.neutralSoft },
           '&:active': { transform: 'scale(0.985)' },
           '&:focus-visible': {
             outline: 'none',
@@ -72,13 +76,15 @@ export const WorkspaceSwitcher = () => {
             {activeWorkspace.openTaskCount} open tasks
           </Typography>
         </Box>
-        <ChevronsUpDown
-          size={14}
-          strokeWidth={1.75}
-          color={colors.textSecondary}
-          aria-hidden="true"
-          style={{ flexShrink: 0 }}
-        />
+        {single ? null : (
+          <ChevronsUpDown
+            size={14}
+            strokeWidth={1.75}
+            color={colors.textSecondary}
+            aria-hidden="true"
+            style={{ flexShrink: 0 }}
+          />
+        )}
       </Box>
 
       <Menu

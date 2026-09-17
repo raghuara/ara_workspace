@@ -1,13 +1,4 @@
-import {
-  BadgeCheck,
-  Building2,
-  KeyRound,
-  History,
-  LayoutDashboard,
-  Settings2,
-  ShieldCheck,
-  Users,
-} from 'lucide-react'
+import { Building2, TrendingUp, History, LayoutDashboard, Settings2, ShieldCheck, Users } from 'lucide-react'
 import { PERMISSIONS } from './permissions'
 import { FEATURES } from './features'
 import { ROUTES } from './routes'
@@ -49,6 +40,14 @@ export const NAVIGATION = [
         permission: PERMISSIONS.ACTIVITY_VIEW,
         feature: FEATURES.ACTIVITY_LOG,
       },
+      {
+        key: 'performance',
+        label: 'Performance',
+        to: ROUTES.performance,
+        icon: TrendingUp,
+        permission: PERMISSIONS.REVIEW_VIEW,
+        feature: FEATURES.PERFORMANCE,
+      },
     ],
   },
   {
@@ -56,9 +55,9 @@ export const NAVIGATION = [
     label: 'Administration',
     children: [
       {
-        key: 'admin-workspaces',
-        label: 'Workspaces',
-        to: ROUTES.adminWorkspaces,
+        key: 'admin-setup',
+        label: 'Setup',
+        to: ROUTES.adminSetup,
         icon: Settings2,
         permission: [
           PERMISSIONS.WORKSPACE_CREATE,
@@ -66,42 +65,20 @@ export const NAVIGATION = [
           PERMISSIONS.GROUP_MANAGE,
           PERMISSIONS.TEAM_MANAGE,
           PERMISSIONS.STATUS_MANAGE,
+          PERMISSIONS.EMPLOYEE_UPDATE,
         ],
       },
       {
-        key: 'admin-user-types',
-        label: 'User Types',
-        to: ROUTES.adminUserTypes,
+        key: 'admin-access',
+        label: 'Access',
+        to: ROUTES.adminAccess,
         icon: ShieldCheck,
-        permission: PERMISSIONS.USERTYPE_VIEW,
-      },
-      {
-        key: 'admin-features',
-        label: 'Feature Access',
-        to: ROUTES.adminFeatures,
-        icon: Settings2,
-        permission: PERMISSIONS.FEATURE_MANAGE,
-      },
-      {
-        key: 'admin-accounts',
-        label: 'Accounts',
-        to: ROUTES.adminAccounts,
-        icon: KeyRound,
-        permission: PERMISSIONS.USERTYPE_MANAGE,
-      },
-      {
-        key: 'admin-departments',
-        label: 'Departments',
-        to: ROUTES.adminDepartments,
-        icon: Building2,
-        permission: PERMISSIONS.EMPLOYEE_UPDATE,
-      },
-      {
-        key: 'admin-designations',
-        label: 'Designations',
-        to: ROUTES.adminDesignations,
-        icon: BadgeCheck,
-        permission: PERMISSIONS.EMPLOYEE_UPDATE,
+        permission: [
+          PERMISSIONS.USERTYPE_VIEW,
+          PERMISSIONS.USERTYPE_MANAGE,
+          PERMISSIONS.ACCOUNT_MANAGE,
+          PERMISSIONS.FEATURE_MANAGE,
+        ],
       },
     ],
   },

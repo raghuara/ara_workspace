@@ -31,10 +31,10 @@ import { QueryStateView } from '@/components/QueryStateView'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ToneChip } from '@/components/ToneChip'
+import { TonePicker } from '@/components/TonePicker'
 import { clientService } from '@/api/clientService'
 import { isForbidden } from '@/api/httpClient'
 import { PERMISSIONS } from '@/constants/permissions'
-import { TONE_KEYS } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -97,9 +97,7 @@ const ClientFormDialog = ({ client, workspaceId, onClose, onSaved }) => {
   return (
     <Dialog open onClose={submitting ? undefined : onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={handleSubmit} noValidate>
-        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>
-          {isEditing ? 'Edit client' : 'Add client'}
-        </DialogTitle>
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>{isEditing ? 'Edit client' : 'Add client'}</DialogTitle>
         <DialogContent dividers>
           {error ? (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -122,28 +120,12 @@ const ClientFormDialog = ({ client, workspaceId, onClose, onSaved }) => {
             </TextField>
           </Box>
 
-          <Typography variant="caption" component="p" sx={{ mb: 0.75 }}>
-            Colour — used on task cards so this client is recognisable at a glance
-          </Typography>
-          <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-            {TONE_KEYS.map((tone) => (
-              <Box
-                key={tone}
-                component="button"
-                type="button"
-                aria-label={`Colour ${tone}`}
-                aria-pressed={values.tone === tone}
-                onClick={() => setValues((current) => ({ ...current, tone }))}
-                sx={{ border: 0, background: 'none', p: 0, cursor: 'pointer' }}
-              >
-                <ToneChip
-                  label={values.name || tone}
-                  tone={tone}
-                  sx={values.tone === tone ? { outline: '2px solid #2563EB', outlineOffset: 1 } : undefined}
-                />
-              </Box>
-            ))}
-          </Stack>
+          <TonePicker
+            value={values.tone}
+            onChange={(tone) => setValues((current) => ({ ...current, tone }))}
+            previewLabel={values.name}
+            helperText="Used on task cards so this client is recognisable at a glance."
+          />
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 1.5 }}>
           <Button onClick={onClose} variant="outlined" disabled={submitting}>
@@ -205,7 +187,11 @@ export const ClientsPage = () => {
         breadcrumbs={[{ label: 'Clients' }]}
         actions={
           can(PERMISSIONS.CLIENT_CREATE) ? (
-            <Button variant="contained" startIcon={<Plus size={16} strokeWidth={2} />} onClick={() => setFormClient(null)}>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} strokeWidth={2} />}
+              onClick={() => setFormClient(null)}
+            >
               Add client
             </Button>
           ) : null
@@ -288,7 +274,11 @@ export const ClientsPage = () => {
                         <Stack direction="row" spacing={0.5} sx={{ justifyContent: 'flex-end' }}>
                           {can(PERMISSIONS.CLIENT_UPDATE) ? (
                             <Tooltip title="Edit client">
-                              <IconButton size="small" aria-label={`Edit ${client.name}`} onClick={() => setFormClient(client)}>
+                              <IconButton
+                                size="small"
+                                aria-label={`Edit ${client.name}`}
+                                onClick={() => setFormClient(client)}
+                              >
                                 <Pencil size={16} strokeWidth={1.75} />
                               </IconButton>
                             </Tooltip>
@@ -317,7 +307,11 @@ export const ClientsPage = () => {
           </TableContainer>
 
           {!loading && data?.items?.length === 0 ? (
-            <EmptyState icon={Building2} title="No clients found" description="Add a client to start filing tasks against them." />
+            <EmptyState
+              icon={Building2}
+              title="No clients found"
+              description="Add a client to start filing tasks against them."
+            />
           ) : null}
 
           {data?.total ? (

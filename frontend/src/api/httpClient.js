@@ -55,7 +55,10 @@ export const clearToken = () => {
 // ---------------------------------------------------------------------------
 // Real HTTP transport against the Node.js API.
 // ---------------------------------------------------------------------------
-const API_BASE_URL = (import.meta.env.VITE_API_URL ?? 'http://localhost:5000/api').replace(/\/$/, '')
+const API_BASE_URL = (
+  import.meta.env.VITE_API_URL ??
+  (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
+).replace(/\/$/, '')
 
 export const toQueryString = (params = {}) => {
   const query = new URLSearchParams()
@@ -116,3 +119,38 @@ export const apiRequest = async (path, options = {}) => {
   return payload
 }
 
+
+/** Fetches a binary response (an .xlsx, a PDF) with the session token attached. */
+export const apiDownload = async (path) => {
+  const headers = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { headers })
+  } catch {
+    throw new ApiError(0, 'Could not reach the server. Check that the backend is running.', 'NETWORK')
+  }
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null)
+    throw new ApiError(response.status, payload?.message ?? 'The file could not be downloaded.', payload?.code ?? 'INTERNAL', null)
+  }
+
+  const disposition = response.headers.get('Content-Disposition') ?? ''
+  const match = /filename="?([^";]+)"?/.exec(disposition)
+  return { blob: await response.blob(), filename: match?.[1] ?? null }
+}
+
+/** Hands a Blob to the browser as a download. */
+export const saveBlob = (blob, filename) => {
+  const url = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = filename
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}

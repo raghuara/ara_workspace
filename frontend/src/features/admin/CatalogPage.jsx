@@ -32,10 +32,11 @@ import { ToneChip } from '@/components/ToneChip'
 import { PERMISSIONS } from '@/constants/permissions'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 import { pluralize } from '@/utils/format'
 
-const CatalogDialog = ({ config, item, onClose, onSaved }) => {
+const CatalogDialog = ({ config, item, workspaceId, onClose, onSaved }) => {
   const isEditing = Boolean(item)
   const [values, setValues] = useState({
     name: item?.name ?? '',
@@ -63,7 +64,7 @@ const CatalogDialog = ({ config, item, onClose, onSaved }) => {
     try {
       const payload = { name: values.name.trim(), description: values.description.trim(), isActive: values.isActive }
       if (isEditing) await config.service.update(item.id, payload)
-      else await config.service.create(payload)
+      else await config.service.create({ ...payload, workspaceId })
       onSaved()
       onClose()
     } catch (caught) {
@@ -139,8 +140,11 @@ export const CatalogPage = ({ config }) => {
   const { can } = usePermissions()
   const canManage = can(PERMISSIONS.EMPLOYEE_UPDATE)
   const Icon = config.icon
+  const { activeWorkspaceId, activeWorkspace } = useWorkspace()
 
-  const { data, loading, error, reload } = useAsync(config.service.list, [])
+  const { data, loading, error, reload } = useAsync(config.service.list, [{ workspaceId: activeWorkspaceId }], {
+    enabled: Boolean(activeWorkspaceId),
+  })
 
   const [dialog, setDialog] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
@@ -165,8 +169,10 @@ export const CatalogPage = ({ config }) => {
     <Box sx={{ maxWidth: layout.contentMaxWidth, mx: 'auto', px: { xs: 2, md: 3, lg: 4 }, py: { xs: 3, md: 4 } }}>
       <PageHeader
         title={config.plural}
-        description={config.description}
-        breadcrumbs={[{ label: 'Administration' }, { label: config.plural }]}
+        description={
+          activeWorkspace ? `${config.description} These belong to ${activeWorkspace.name}.` : config.description
+        }
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Setup' }, { label: config.plural }]}
         actions={
           canManage ? (
             <Button

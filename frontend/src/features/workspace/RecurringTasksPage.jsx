@@ -37,6 +37,7 @@ import { PERMISSIONS } from '@/constants/permissions'
 import { DUE_OFFSETS, PRIORITY_TONES } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAccess } from '@/hooks/useAccess'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 import { formatDate, formatRelativeDay } from '@/utils/date'
@@ -80,20 +81,46 @@ const RowMenu = ({ rule, canEdit, onEdit, onToggle, onDelete }) => {
   if (!canEdit) return null
   return (
     <>
-      <IconButton size="small" aria-label={`Actions for ${rule.title}`} onClick={(event) => setAnchor(event.currentTarget)}>
+      <IconButton
+        size="small"
+        aria-label={`Actions for ${rule.title}`}
+        onClick={(event) => setAnchor(event.currentTarget)}
+      >
         <Ellipsis size={16} strokeWidth={2} />
       </IconButton>
       <Menu open={Boolean(anchor)} anchorEl={anchor} onClose={() => setAnchor(null)}>
-        <MenuItem onClick={() => { setAnchor(null); onEdit(rule) }}>
-          <ListItemIcon><Pencil size={15} strokeWidth={1.75} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            setAnchor(null)
+            onEdit(rule)
+          }}
+        >
+          <ListItemIcon>
+            <Pencil size={15} strokeWidth={1.75} />
+          </ListItemIcon>
           <ListItemText>Edit</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => { setAnchor(null); onToggle(rule) }}>
-          <ListItemIcon>{rule.isActive ? <Pause size={15} strokeWidth={1.75} /> : <Play size={15} strokeWidth={1.75} />}</ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            setAnchor(null)
+            onToggle(rule)
+          }}
+        >
+          <ListItemIcon>
+            {rule.isActive ? <Pause size={15} strokeWidth={1.75} /> : <Play size={15} strokeWidth={1.75} />}
+          </ListItemIcon>
           <ListItemText>{rule.isActive ? 'Pause' : 'Resume'}</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => { setAnchor(null); onDelete(rule) }} sx={{ color: colors.danger }}>
-          <ListItemIcon sx={{ color: 'inherit' }}><Trash2 size={15} strokeWidth={1.75} /></ListItemIcon>
+        <MenuItem
+          onClick={() => {
+            setAnchor(null)
+            onDelete(rule)
+          }}
+          sx={{ color: colors.danger }}
+        >
+          <ListItemIcon sx={{ color: 'inherit' }}>
+            <Trash2 size={15} strokeWidth={1.75} />
+          </ListItemIcon>
           <ListItemText>Delete</ListItemText>
         </MenuItem>
       </Menu>
@@ -104,7 +131,8 @@ const RowMenu = ({ rule, canEdit, onEdit, onToggle, onDelete }) => {
 export const RecurringTasksPage = () => {
   const { can } = usePermissions()
   const { activeWorkspace, activeWorkspaceId } = useWorkspace()
-  const canEdit = can(PERMISSIONS.TASK_RECURRING)
+  const { canCreateAnywhere } = useAccess()
+  const canEdit = can(PERMISSIONS.TASK_RECURRING) && canCreateAnywhere
 
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('all')
@@ -119,7 +147,13 @@ export const RecurringTasksPage = () => {
     const needle = search.trim().toLowerCase()
     return items
       .filter((rule) => (status === 'all' ? true : status === 'active' ? rule.isActive : !rule.isActive))
-      .filter((rule) => !needle || `${rule.title} ${rule.clientName ?? ''} ${rule.groupName ?? ''} ${rule.teamName ?? ''}`.toLowerCase().includes(needle))
+      .filter(
+        (rule) =>
+          !needle ||
+          `${rule.title} ${rule.clientName ?? ''} ${rule.groupName ?? ''} ${rule.teamName ?? ''}`
+            .toLowerCase()
+            .includes(needle),
+      )
       .map((rule) => ({ ...rule, nextRun: nextRunFor(rule) }))
       .sort((a, b) => Number(b.isActive) - Number(a.isActive) || (a.nextRun ?? '9').localeCompare(b.nextRun ?? '9'))
   }, [items, search, status])
@@ -130,7 +164,12 @@ export const RecurringTasksPage = () => {
     weekAhead.setDate(weekAhead.getDate() + 7)
     const cutoff = weekAhead.toISOString().slice(0, 10)
     const runsThisWeek = active.reduce(
-      (sum, rule) => sum + nextOccurrences(rule.schedule, { from: todayIso(), endDate: rule.endDate, count: 7 }).filter((day) => day <= cutoff).length * (rule.perAssignee ? rule.assigneeIds.length : 1),
+      (sum, rule) =>
+        sum +
+        nextOccurrences(rule.schedule, { from: todayIso(), endDate: rule.endDate, count: 7 }).filter(
+          (day) => day <= cutoff,
+        ).length *
+          (rule.perAssignee ? rule.assigneeIds.length : 1),
       0,
     )
     const soonest = active.map(nextRunFor).filter(Boolean).sort()[0] ?? null
@@ -168,34 +207,79 @@ export const RecurringTasksPage = () => {
   const loading = rules.loading && !rules.data
 
   return (
-    <Box sx={{ maxWidth: layout.wideMaxWidth, mx: 'auto', px: { xs: 1.5, sm: 2, md: 3, lg: 4 }, py: { xs: 1.5, md: 2.5 } }}>
+    <Box
+      sx={{ maxWidth: layout.wideMaxWidth, mx: 'auto', px: { xs: 1.5, sm: 2, md: 3, lg: 4 }, py: { xs: 1.5, md: 2.5 } }}
+    >
       <PageHeader
         title="Recurring tasks"
         description={`Tasks that create themselves on a schedule in ${activeWorkspace?.name ?? 'this workspace'} — every day, chosen weekdays, or set dates each month.`}
         breadcrumbs={[{ label: 'Work' }, { label: 'Recurring' }]}
         actions={
           canEdit ? (
-            <Button variant="contained" startIcon={<Plus size={16} strokeWidth={2} />} onClick={() => setDialog({ open: true, rule: null })}>
+            <Button
+              variant="contained"
+              startIcon={<Plus size={16} strokeWidth={2} />}
+              onClick={() => setDialog({ open: true, rule: null })}
+            >
               New recurring task
             </Button>
           ) : null
         }
       />
 
-      <Box sx={{ display: 'grid', gap: 1.25, mb: 1.5, gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' } }}>
+      <Box
+        sx={{
+          display: 'grid',
+          gap: 1.25,
+          mb: 1.5,
+          gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' },
+        }}
+      >
         {loading ? (
           [0, 1, 2, 3].map((index) => <StatTileSkeleton key={index} />)
         ) : (
           <>
-            <StatCard dense label="Active" value={stats.active} helperText={stats.paused ? `${stats.paused} paused` : 'none paused'} icon={Repeat} tone="blue" />
-            <StatCard dense label="Due this week" value={stats.runsThisWeek} helperText="tasks that will be created" icon={CalendarCheck} tone="teal" />
-            <StatCard dense label="Next run" value={stats.soonest ? formatRelativeDay(stats.soonest) : '—'} helperText={stats.soonest ? formatDate(stats.soonest) : 'nothing scheduled'} icon={Play} tone="violet" />
-            <StatCard dense label="Created so far" value={stats.created} helperText="tasks from all rules" icon={Users} tone="orange" />
+            <StatCard
+              dense
+              label="Active"
+              value={stats.active}
+              helperText={stats.paused ? `${stats.paused} paused` : 'none paused'}
+              icon={Repeat}
+              tone="blue"
+            />
+            <StatCard
+              dense
+              label="Due this week"
+              value={stats.runsThisWeek}
+              helperText="tasks that will be created"
+              icon={CalendarCheck}
+              tone="teal"
+            />
+            <StatCard
+              dense
+              label="Next run"
+              value={stats.soonest ? formatRelativeDay(stats.soonest) : '—'}
+              helperText={stats.soonest ? formatDate(stats.soonest) : 'nothing scheduled'}
+              icon={Play}
+              tone="violet"
+            />
+            <StatCard
+              dense
+              label="Created so far"
+              value={stats.created}
+              helperText="tasks from all rules"
+              icon={Users}
+              tone="orange"
+            />
           </>
         )}
       </Box>
 
-      <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', mb: 1.5 }}>
+      <Stack
+        direction={{ xs: 'column', sm: 'row' }}
+        spacing={1}
+        sx={{ alignItems: { xs: 'stretch', sm: 'center' }, justifyContent: 'space-between', mb: 1.5 }}
+      >
         <TextField
           size="small"
           placeholder="Search by title, client, group or team"
@@ -212,10 +296,22 @@ export const RecurringTasksPage = () => {
             },
           }}
         />
-        <ToggleButtonGroup exclusive size="small" value={status} onChange={(_, next) => next && setStatus(next)} aria-label="Filter by status">
-          <ToggleButton value="all" sx={{ textTransform: 'none', px: 1.5 }}>All</ToggleButton>
-          <ToggleButton value="active" sx={{ textTransform: 'none', px: 1.5 }}>Active</ToggleButton>
-          <ToggleButton value="paused" sx={{ textTransform: 'none', px: 1.5 }}>Paused</ToggleButton>
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={status}
+          onChange={(_, next) => next && setStatus(next)}
+          aria-label="Filter by status"
+        >
+          <ToggleButton value="all" sx={{ textTransform: 'none', px: 1.5 }}>
+            All
+          </ToggleButton>
+          <ToggleButton value="active" sx={{ textTransform: 'none', px: 1.5 }}>
+            Active
+          </ToggleButton>
+          <ToggleButton value="paused" sx={{ textTransform: 'none', px: 1.5 }}>
+            Paused
+          </ToggleButton>
         </ToggleButtonGroup>
       </Stack>
 
@@ -233,7 +329,12 @@ export const RecurringTasksPage = () => {
             />
           </SectionCard>
         ) : (
-          <SectionCard padded={false} title={`${visible.length} of ${items.length} rules`} description="Newest runs first · paused rules sink to the bottom" accent="blue">
+          <SectionCard
+            padded={false}
+            title={`${visible.length} of ${items.length} rules`}
+            description="Newest runs first · paused rules sink to the bottom"
+            accent="blue"
+          >
             {visible.length === 0 ? (
               <EmptyState title="Nothing matches" description="Try a different search or status." />
             ) : (
@@ -260,8 +361,19 @@ export const RecurringTasksPage = () => {
                               {rule.title}
                             </Typography>
                             <Stack direction="row" spacing={0.5} sx={{ mt: 0.375, flexWrap: 'wrap' }} useFlexGap>
-                              {rule.clientName ? <ToneChip label={rule.clientName} tone={rule.clientTone ?? 'slate'} /> : null}
-                              {rule.groupName ? <ToneChip label={rule.teamName && rule.teamName !== '—' ? `${rule.groupName} · ${rule.teamName}` : rule.groupName} tone={rule.groupTone ?? 'slate'} /> : null}
+                              {rule.clientName ? (
+                                <ToneChip label={rule.clientName} tone={rule.clientTone ?? 'slate'} />
+                              ) : null}
+                              {rule.groupName ? (
+                                <ToneChip
+                                  label={
+                                    rule.teamName && rule.teamName !== '—'
+                                      ? `${rule.groupName} · ${rule.teamName}`
+                                      : rule.groupName
+                                  }
+                                  tone={rule.groupTone ?? 'slate'}
+                                />
+                              ) : null}
                               <ToneChip label={rule.priority} tone={PRIORITY_TONES[rule.priority] ?? 'gray'} />
                             </Stack>
                           </TableCell>
@@ -305,11 +417,19 @@ export const RecurringTasksPage = () => {
                               checked={rule.isActive}
                               disabled={!canEdit || busyId === rule.id}
                               onChange={() => toggle(rule)}
-                              slotProps={{ input: { 'aria-label': `${rule.isActive ? 'Pause' : 'Resume'} ${rule.title}` } }}
+                              slotProps={{
+                                input: { 'aria-label': `${rule.isActive ? 'Pause' : 'Resume'} ${rule.title}` },
+                              }}
                             />
                           </TableCell>
                           <TableCell align="right">
-                            <RowMenu rule={rule} canEdit={canEdit} onEdit={(target) => setDialog({ open: true, rule: target })} onToggle={toggle} onDelete={setDeleting} />
+                            <RowMenu
+                              rule={rule}
+                              canEdit={can(PERMISSIONS.TASK_RECURRING) && rule.canEdit !== false}
+                              onEdit={(target) => setDialog({ open: true, rule: target })}
+                              onToggle={toggle}
+                              onDelete={setDeleting}
+                            />
                           </TableCell>
                         </TableRow>
                       ))}
@@ -319,7 +439,15 @@ export const RecurringTasksPage = () => {
 
                 <Stack sx={{ display: { xs: 'flex', md: 'none' } }}>
                   {visible.map((rule) => (
-                    <Box key={rule.id} sx={{ px: 1.75, py: 1.25, borderBottom: `1px solid ${colors.border}`, opacity: rule.isActive ? 1 : 0.6 }}>
+                    <Box
+                      key={rule.id}
+                      sx={{
+                        px: 1.75,
+                        py: 1.25,
+                        borderBottom: `1px solid ${colors.border}`,
+                        opacity: rule.isActive ? 1 : 0.6,
+                      }}
+                    >
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body2" fontWeight={600} noWrap>
@@ -329,15 +457,34 @@ export const RecurringTasksPage = () => {
                             {describeSchedule(rule.schedule)} · due {dueLabel(rule.dueOffsetDays).toLowerCase()}
                           </Typography>
                         </Box>
-                        <Switch size="small" checked={rule.isActive} disabled={!canEdit || busyId === rule.id} onChange={() => toggle(rule)} />
-                        <RowMenu rule={rule} canEdit={canEdit} onEdit={(target) => setDialog({ open: true, rule: target })} onToggle={toggle} onDelete={setDeleting} />
+                        <Switch
+                          size="small"
+                          checked={rule.isActive}
+                          disabled={!canEdit || busyId === rule.id}
+                          onChange={() => toggle(rule)}
+                        />
+                        <RowMenu
+                          rule={rule}
+                          canEdit={can(PERMISSIONS.TASK_RECURRING) && rule.canEdit !== false}
+                          onEdit={(target) => setDialog({ open: true, rule: target })}
+                          onToggle={toggle}
+                          onDelete={setDeleting}
+                        />
                       </Stack>
-                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}>
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={{ alignItems: 'center', justifyContent: 'space-between', mt: 0.75 }}
+                      >
                         <ScheduleBadges schedule={rule.schedule} dense />
                         <Assignees rule={rule} />
                       </Stack>
                       <Typography variant="caption" component="p" sx={{ mt: 0.5 }}>
-                        {rule.nextRun ? `Next ${formatRelativeDay(rule.nextRun).toLowerCase()} · ${formatDate(rule.nextRun)}` : rule.isActive ? 'No upcoming run' : 'Paused'}
+                        {rule.nextRun
+                          ? `Next ${formatRelativeDay(rule.nextRun).toLowerCase()} · ${formatDate(rule.nextRun)}`
+                          : rule.isActive
+                            ? 'No upcoming run'
+                            : 'Paused'}
                         {' · '}
                         {rule.createdCount ?? 0} created
                       </Typography>
@@ -362,7 +509,9 @@ export const RecurringTasksPage = () => {
       <ConfirmDialog
         open={Boolean(deleting)}
         title="Delete this recurring task?"
-        description={deleting ? `"${deleting.title}" will stop being created. Tasks it already created stay on the board.` : ''}
+        description={
+          deleting ? `"${deleting.title}" will stop being created. Tasks it already created stay on the board.` : ''
+        }
         confirmLabel="Delete"
         confirming={Boolean(deleting) && busyId === deleting.id}
         onConfirm={remove}

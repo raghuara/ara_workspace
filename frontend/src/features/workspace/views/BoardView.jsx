@@ -10,6 +10,7 @@ import { taskService } from '@/api/taskService'
 import { PERMISSIONS } from '@/constants/permissions'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAccess } from '@/hooks/useAccess'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 
@@ -100,13 +101,20 @@ const insertTask = (columns, columnId, index, task) =>
 
 const removeTask = (columns, taskId) =>
   columns.map((column) =>
-    column.tasks.some((task) => task.id === taskId) ? recount(column, column.tasks.filter((task) => task.id !== taskId)) : column,
+    column.tasks.some((task) => task.id === taskId)
+      ? recount(
+          column,
+          column.tasks.filter((task) => task.id !== taskId),
+        )
+      : column,
   )
 
-export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAddGroup, onChanged, onBoardChange }) => {
+export const BoardView = ({ board, loading, scope, onOpenTask, onAddGroup, onChanged, onBoardChange }) => {
   const { can } = usePermissions()
   const { activeWorkspaceId } = useWorkspace()
   const canMove = can(PERMISSIONS.TASK_MOVE)
+  const { canEditTask, canCreateAnywhere } = useAccess()
+  const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
 
   const columns = board?.columns ?? []
 
@@ -115,6 +123,7 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
   const [settledId, setSettledId] = useState(null)
   const [moveError, setMoveError] = useState(null)
   const [composerColumnId, setComposerColumnId] = useState(null)
+  const [editingTaskId, setEditingTaskId] = useState(null)
 
   const scrollerRef = useRef(null)
   const overlayRef = useRef(null)
@@ -200,7 +209,11 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
     if (scroller && dragRef.current) {
       const rect = scroller.getBoundingClientRect()
       const dx =
-        x < rect.left + SCROLL_EDGE ? -(SCROLL_EDGE - (x - rect.left)) : x > rect.right - SCROLL_EDGE ? SCROLL_EDGE - (rect.right - x) : 0
+        x < rect.left + SCROLL_EDGE
+          ? -(SCROLL_EDGE - (x - rect.left))
+          : x > rect.right - SCROLL_EDGE
+            ? SCROLL_EDGE - (rect.right - x)
+            : 0
       if (dx) {
         scroller.scrollLeft += (dx / SCROLL_EDGE) * SCROLL_SPEED
         scrolled = true
@@ -210,7 +223,11 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
       if (list) {
         const listRect = list.getBoundingClientRect()
         const dy =
-          y < listRect.top + SCROLL_EDGE ? -(SCROLL_EDGE - (y - listRect.top)) : y > listRect.bottom - SCROLL_EDGE ? SCROLL_EDGE - (listRect.bottom - y) : 0
+          y < listRect.top + SCROLL_EDGE
+            ? -(SCROLL_EDGE - (y - listRect.top))
+            : y > listRect.bottom - SCROLL_EDGE
+              ? SCROLL_EDGE - (listRect.bottom - y)
+              : 0
         if (dy) {
           list.scrollTop += (dy / SCROLL_EDGE) * SCROLL_SPEED
           scrolled = true
@@ -249,7 +266,7 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
     const fromIndex = Math.max(0, column?.tasks.findIndex((item) => item.id === task.id) ?? 0)
 
     if (type === 'edit') {
-      onEditTask?.(task)
+      setEditingTaskId(task.id)
       return
     }
 
@@ -302,7 +319,8 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
           tags: task.tags ?? [],
         })
         const latest = boardRef.current
-        if (latest) onBoardChange({ ...latest, columns: insertTask(latest.columns, saved.statusId, fromIndex + 1, saved) })
+        if (latest)
+          onBoardChange({ ...latest, columns: insertTask(latest.columns, saved.statusId, fromIndex + 1, saved) })
         settle(saved.id)
       } catch (error) {
         setMoveError(error?.message ?? 'The task could not be duplicated.')
@@ -355,7 +373,8 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
       if (latest) onBoardChange({ ...latest, columns: patchTask(latest.columns, task.id, saved) })
     } catch (error) {
       const latest = boardRef.current
-      if (latest) onBoardChange({ ...latest, columns: moveWithin(latest.columns, task.id, fromColumnId, fromIndex, task) })
+      if (latest)
+        onBoardChange({ ...latest, columns: moveWithin(latest.columns, task.id, fromColumnId, fromIndex, task) })
       setMoveError(error?.message ?? 'The task could not be moved. It has been put back.')
     }
   }
@@ -518,19 +537,35 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
           const tone = STATUS_TONES[column.tone] ?? STATUS_TONES.slate
           const isDropTarget = Boolean(drag) && target?.columnId === column.id
 
-          const cards = column.tasks.map((task, index) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              columns={columns}
-              draggable={canMove}
-              isDragging={drag?.task.id === task.id}
-              isSettling={settledId === task.id}
-              onOpen={openTask}
-              onAction={handleCardAction}
-              onPointerDown={(event) => handlePointerDown(event, task, column.id, index)}
-            />
-          ))
+          const cards = column.tasks.map((task, index) =>
+            editingTaskId === task.id ? (
+              <QuickAddCard
+                key={task.id}
+                column={column}
+                task={task}
+                onCancel={() => setEditingTaskId(null)}
+                onSaved={(saved) => {
+                  setEditingTaskId(null)
+                  const latest = boardRef.current
+                  if (latest && onBoardChange)
+                    onBoardChange({ ...latest, columns: patchTask(latest.columns, task.id, saved) })
+                  else onChanged?.()
+                }}
+              />
+            ) : (
+              <TaskCard
+                key={task.id}
+                task={task}
+                columns={columns}
+                draggable={canMove && canEditTask(task)}
+                isDragging={drag?.task.id === task.id}
+                isSettling={settledId === task.id}
+                onOpen={openTask}
+                onAction={handleCardAction}
+                onPointerDown={(event) => handlePointerDown(event, task, column.id, index)}
+              />
+            ),
+          )
 
           if (composerColumnId === column.id) {
             cards.unshift(
@@ -602,7 +637,7 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
                     {column.taskCount}
                   </Typography>
                 </Tooltip>
-                {can(PERMISSIONS.TASK_CREATE) ? (
+                {canCreate ? (
                   <IconButton
                     size="small"
                     aria-label={`Add task to ${column.name}`}
@@ -636,7 +671,7 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onEditTask, onAdd
                   </Box>
                 ) : null}
 
-                {can(PERMISSIONS.TASK_CREATE) ? (
+                {canCreate ? (
                   <Button
                     size="small"
                     onClick={() => setComposerColumnId(column.id)}

@@ -1,5 +1,5 @@
 import { Box } from '@mui/material'
-import { EMPLOYMENT_STATUS } from '@/constants/domain'
+import { EMPLOYMENT_STATUS, PERFORMANCE_STATUS } from '@/constants/domain'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 
 const STATUS_TONE_MAP = {
@@ -7,6 +7,13 @@ const STATUS_TONE_MAP = {
   [EMPLOYMENT_STATUS.PROBATION]: 'amber',
   [EMPLOYMENT_STATUS.NOTICE_PERIOD]: 'orange',
   [EMPLOYMENT_STATUS.INACTIVE]: 'gray',
+
+  [PERFORMANCE_STATUS.DRAFT]: 'gray',
+  [PERFORMANCE_STATUS.IN_PROGRESS]: 'blue',
+  [PERFORMANCE_STATUS.PENDING_EMPLOYEE]: 'amber',
+  [PERFORMANCE_STATUS.COMPLETED]: 'green',
+  'On Track': 'teal',
+  'At Risk': 'rose',
 
 }
 

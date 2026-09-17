@@ -1,5 +1,17 @@
 import { useState } from 'react'
-import { Box, Divider, IconButton, InputBase, ListItemIcon, ListItemText, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material'
+import {
+  Box,
+  Divider,
+  IconButton,
+  InputBase,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Stack,
+  Tooltip,
+  Typography,
+} from '@mui/material'
 import { keyframes } from '@mui/material/styles'
 import {
   ArrowRightLeft,
@@ -22,6 +34,7 @@ import { UserAvatar } from '@/components/UserAvatar'
 import { PERMISSIONS } from '@/constants/permissions'
 import { PRIORITY_TONES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAccess } from '@/hooks/useAccess'
 import { colors } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
 
@@ -47,7 +60,10 @@ const ActionButton = ({ title, icon: Icon, tone, onClick }) => (
         height: 26,
         borderRadius: 1,
         color: tone ? STATUS_TONES[tone].strong : colors.textSecondary,
-        '&:hover': { bgcolor: tone ? STATUS_TONES[tone].soft : colors.neutralSoft, color: tone ? STATUS_TONES[tone].strong : colors.textPrimary },
+        '&:hover': {
+          bgcolor: tone ? STATUS_TONES[tone].soft : colors.neutralSoft,
+          color: tone ? STATUS_TONES[tone].strong : colors.textPrimary,
+        },
       }}
     >
       <Icon size={14} strokeWidth={2} aria-hidden="true" />
@@ -77,10 +93,12 @@ export const TaskCard = ({
 
   const interactive = Boolean(onAction) && !lifted && !isDragging
   const completed = task.statusKind === 'completed'
-  const canMove = can(PERMISSIONS.TASK_MOVE)
-  const canUpdate = can(PERMISSIONS.TASK_UPDATE)
-  const canCreate = can(PERMISSIONS.TASK_CREATE)
-  const canDelete = can(PERMISSIONS.TASK_DELETE)
+  const { canEditTask, canCreateAnywhere } = useAccess()
+  const editable = canEditTask(task)
+  const canMove = can(PERMISSIONS.TASK_MOVE) && editable
+  const canUpdate = can(PERMISSIONS.TASK_UPDATE) && editable
+  const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
+  const canDelete = can(PERMISSIONS.TASK_DELETE) && editable
   const menuOpen = Boolean(menu)
 
   const closeMenu = () => {
@@ -226,7 +244,10 @@ export const TaskCard = ({
         <Typography variant="body2" fontWeight={600} sx={{ mb: 0.875, lineHeight: 1.4 }}>
           {task.recurringId ? (
             <Tooltip title="Created automatically from a recurring task">
-              <Box component="span" sx={{ display: 'inline-flex', verticalAlign: '-2px', mr: 0.5, color: colors.brand }}>
+              <Box
+                component="span"
+                sx={{ display: 'inline-flex', verticalAlign: '-2px', mr: 0.5, color: colors.brand }}
+              >
                 <Repeat size={12} strokeWidth={2.25} aria-label="Recurring" />
               </Box>
             </Tooltip>
@@ -270,9 +291,7 @@ export const TaskCard = ({
           spacing={0.375}
           sx={{ alignItems: 'center', color: task.isOverdue ? STATUS_TONES.rose.strong : colors.textSecondary }}
         >
-          {task.isOverdue ? (
-            <TriangleAlert size={12} strokeWidth={2} aria-hidden="true" />
-          ) : null}
+          {task.isOverdue ? <TriangleAlert size={12} strokeWidth={2} aria-hidden="true" /> : null}
           <Typography variant="caption" sx={{ color: 'inherit', fontWeight: task.isOverdue ? 600 : 400 }}>
             {formatRelativeDay(task.dueDate)}
           </Typography>
@@ -364,7 +383,10 @@ export const TaskCard = ({
                       <ListItemIcon sx={{ color: 'inherit' }}>
                         <Trash2 size={15} strokeWidth={1.75} />
                       </ListItemIcon>
-                      <ListItemText primary="Delete" slotProps={{ primary: { fontSize: '0.8125rem', fontWeight: 500 } }} />
+                      <ListItemText
+                        primary="Delete"
+                        slotProps={{ primary: { fontSize: '0.8125rem', fontWeight: 500 } }}
+                      />
                     </MenuItem>
                   ) : null,
                 ]
@@ -373,7 +395,17 @@ export const TaskCard = ({
                     <ListItemIcon sx={{ color: 'inherit' }}>
                       <ChevronLeft size={15} strokeWidth={2} />
                     </ListItemIcon>
-                    <ListItemText primary="Move to" slotProps={{ primary: { fontSize: '0.75rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' } }} />
+                    <ListItemText
+                      primary="Move to"
+                      slotProps={{
+                        primary: {
+                          fontSize: '0.75rem',
+                          fontWeight: 600,
+                          textTransform: 'uppercase',
+                          letterSpacing: '0.05em',
+                        },
+                      }}
+                    />
                   </MenuItem>,
                   <Divider key="divider" />,
                   ...columns.map((column) => {

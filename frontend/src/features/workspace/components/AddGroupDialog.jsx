@@ -16,9 +16,10 @@ import {
 } from '@mui/material'
 import { Plus } from 'lucide-react'
 import { ToneChip } from '@/components/ToneChip'
+import { TonePicker } from '@/components/TonePicker'
 import { workspaceService } from '@/api/workspaceService'
 import { isForbidden } from '@/api/httpClient'
-import { DEFAULT_STATUS_TEMPLATES, STATUS_KINDS, TONE_KEYS } from '@/constants/workspaceDomain'
+import { DEFAULT_STATUS_TEMPLATES, STATUS_KINDS } from '@/constants/workspaceDomain'
 import { useSubmit } from '@/hooks/useSubmit'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors } from '@/theme/tokens'
@@ -49,9 +50,7 @@ export const AddGroupDialog = ({ open, onClose, onSaved }) => {
   )
 
   const toggle = (key) =>
-    setSelected((current) =>
-      current.includes(key) ? current.filter((item) => item !== key) : [...current, key],
-    )
+    setSelected((current) => (current.includes(key) ? current.filter((item) => item !== key) : [...current, key]))
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -182,30 +181,11 @@ export const AddGroupDialog = ({ open, onClose, onSaved }) => {
                 </MenuItem>
               ))}
             </TextField>
-            <Box>
-              <Typography variant="caption" component="p" sx={{ mb: 0.75 }}>
-                Colour
-              </Typography>
-              <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                {TONE_KEYS.map((tone) => (
-                  <Box
-                    key={tone}
-                    component="button"
-                    type="button"
-                    aria-label={`Colour ${tone}`}
-                    aria-pressed={custom.tone === tone}
-                    onClick={() => setCustom((c) => ({ ...c, tone }))}
-                    sx={{ border: 0, background: 'none', p: 0, cursor: 'pointer' }}
-                  >
-                    <ToneChip
-                      label={tone}
-                      tone={tone}
-                      sx={custom.tone === tone ? { outline: `2px solid ${colors.brand}`, outlineOffset: 1 } : undefined}
-                    />
-                  </Box>
-                ))}
-              </Stack>
-            </Box>
+            <TonePicker
+              value={custom.tone}
+              onChange={(tone) => setCustom((c) => ({ ...c, tone }))}
+              previewLabel={custom.name}
+            />
           </Stack>
         </DialogContent>
 
@@ -213,7 +193,12 @@ export const AddGroupDialog = ({ open, onClose, onSaved }) => {
           <Button onClick={onClose} variant="outlined" disabled={submitting}>
             Cancel
           </Button>
-          <Button type="submit" variant="contained" disabled={submitting} startIcon={<Plus size={16} strokeWidth={2} />}>
+          <Button
+            type="submit"
+            variant="contained"
+            disabled={submitting}
+            startIcon={<Plus size={16} strokeWidth={2} />}
+          >
             {submitting ? 'Adding…' : 'Add to board'}
           </Button>
         </DialogActions>

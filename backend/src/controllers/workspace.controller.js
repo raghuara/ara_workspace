@@ -1,4 +1,6 @@
 const workspaceModel = require("../models/workspace.model");
+const accessModel = require("../models/access.model");
+const access = require("../services/access.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
 const { DEFAULT_STATUS_TEMPLATES, STATUS_KINDS, TONES, USER_TYPE } = require("../constants/workspace");
@@ -69,8 +71,13 @@ const mapMember = (row) => ({
   userTypeId: row.user_type_id,
   userTypeName: row.user_type_name,
   groupId: row.group_id,
-  teamId: row.team_id,
-  taskScope: row.task_scope ?? "team"
+  teamId: row.team_id
+});
+
+const mapGrants = (grants = []) => ({
+  workspace: grants.find((grant) => grant.scope_type === "workspace")?.level ?? null,
+  groups: Object.fromEntries(grants.filter((grant) => grant.scope_type === "group").map((grant) => [grant.scope_id, grant.level])),
+  teams: Object.fromEntries(grants.filter((grant) => grant.scope_type === "team").map((grant) => [grant.scope_id, grant.level]))
 });
 
 const loadAccessibleWorkspace = async (req, res, workspaceId) => {
@@ -107,6 +114,9 @@ const createWorkspace = async (req, res) => {
   if (!name) return badRequest(res, "A workspace name is required.", { name: "Workspace name is required." });
 
   const adminIds = idList(req.body.adminIds);
+  if (adminIds.length === 0) {
+    return badRequest(res, "Every workspace needs at least one admin.", { adminIds: "Choose at least one workspace admin." });
+  }
   if (!(await workspaceModel.employeesExist(adminIds))) {
     return badRequest(res, "One of the selected admins does not exist.", { adminIds: "Unknown employee." });
   }
@@ -168,6 +178,9 @@ const updateWorkspace = async (req, res) => {
   if (!name) return badRequest(res, "A workspace name is required.", { name: "Workspace name is required." });
 
   const adminIds = req.body.adminIds === undefined ? null : idList(req.body.adminIds);
+  if (adminIds && adminIds.length === 0) {
+    return badRequest(res, "Every workspace needs at least one admin.", { adminIds: "Choose at least one workspace admin." });
+  }
   if (adminIds && !(await workspaceModel.employeesExist(adminIds))) {
     return badRequest(res, "One of the selected admins does not exist.", { adminIds: "Unknown employee." });
   }
@@ -212,11 +225,13 @@ const getStructure = async (req, res) => {
   const workspace = await loadAccessibleWorkspace(req, res, req.params.workspaceId);
   if (!workspace) return;
 
-  const [groups, teams, teamMembers, members] = await Promise.all([
+  const [groups, teams, teamMembers, members, scopes, grantsByMember] = await Promise.all([
     workspaceModel.findGroups(workspace.id),
     workspaceModel.findTeamsByWorkspace(workspace.id),
     workspaceModel.findTeamMembersByWorkspace(workspace.id),
-    workspaceModel.findMembers(workspace.id)
+    workspaceModel.findMembers(workspace.id),
+    access.resolveScopes(req, workspace.id),
+    accessModel.findGrantsForWorkspace(workspace.id)
   ]);
 
   const membersByTeam = new Map();
@@ -225,20 +240,33 @@ const getStructure = async (req, res) => {
     membersByTeam.get(row.team_id).push({ id: row.employee_id, fullName: row.full_name });
   });
 
-  res.json({
-    groups: groups.map((group) => ({
-      ...mapGroup(group),
-      teams: teams
+  const visibleGroups = groups
+    .map((group) => {
+      const groupLevel = access.levelForGroup(scopes, group.id);
+      const visibleTeams = teams
         .filter((team) => team.group_id === group.id)
-        .map((team) => {
+        .map((team) => ({ team, level: access.levelForTeam(scopes, team.id, group.id) }))
+        .filter(({ level }) => level !== "none");
+      if (groupLevel === "none" && visibleTeams.length === 0) return null;
+      return {
+        ...mapGroup(group),
+        access: groupLevel,
+        teams: visibleTeams.map(({ team, level }) => {
           const teamMemberList = membersByTeam.get(team.id) ?? [];
           return {
             ...mapTeam(team, teamMemberList.map((member) => member.id)),
+            access: level,
             members: teamMemberList
           };
         })
-    })),
-    members: members.map(mapMember)
+      };
+    })
+    .filter(Boolean);
+
+  res.json({
+    access: { admin: scopes.admin, workspace: scopes.admin ? "edit" : scopes.workspace },
+    groups: visibleGroups,
+    members: members.map((member) => ({ ...mapMember(member), grants: mapGrants(grantsByMember.get(member.employee_id)) }))
   });
 };
 
@@ -264,6 +292,7 @@ const createGroup = async (req, res) => {
       userTypeId: USER_TYPE.TEAM_LEAD,
       groupId: id
     });
+    await accessModel.upsertGrant({ workspaceId: workspace.id, employeeId: leadId, scopeType: "group", scopeId: id, level: "edit" });
   }
 
   res.status(201).json(mapGroup(await workspaceModel.findGroupById(id)));
@@ -291,6 +320,7 @@ const updateGroup = async (req, res) => {
       userTypeId: USER_TYPE.TEAM_LEAD,
       groupId: group.id
     });
+    await accessModel.upsertGrant({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "group", scopeId: group.id, level: "edit" });
   }
 
   res.json(mapGroup(await workspaceModel.findGroupById(group.id)));
@@ -339,12 +369,14 @@ const saveTeam = async (req, res, { group, existing }) => {
         { workspaceId: group.workspace_id, employeeId: leadId, userTypeId: USER_TYPE.TEAM_LEAD, groupId: group.id, teamId: id },
         connection
       );
+      await accessModel.upsertGrant({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "team", scopeId: id, level: "edit" }, connection);
     }
     for (const employeeId of memberIds) {
       await workspaceModel.upsertMember(
         { workspaceId: group.workspace_id, employeeId, userTypeId: USER_TYPE.EMPLOYEE, groupId: group.id, teamId: id },
         connection
       );
+      await accessModel.upsertGrant({ workspaceId: group.workspace_id, employeeId, scopeType: "team", scopeId: id, level: "edit" }, connection);
     }
 
     return id;
@@ -489,20 +521,44 @@ const addMember = async (req, res) => {
   res.status(201).json(mapMember(members.find((member) => member.employee_id === employeeId)));
 };
 
-const updateMember = async (req, res) => {
+const LEVELS = ["view", "edit"];
+
+const updateMemberAccess = async (req, res) => {
   const workspace = await loadAccessibleWorkspace(req, res, req.params.workspaceId);
   if (!workspace) return;
 
-  const taskScope = text(req.body.taskScope);
-  if (!["own", "team"].includes(taskScope)) {
-    return badRequest(res, "Task visibility must be own or team.", { taskScope: "Choose own or team." });
+  const { employeeId } = req.params;
+  const members = await workspaceModel.findMembers(workspace.id);
+  if (!members.some((member) => member.employee_id === employeeId)) {
+    return notFound(res, "That person is not a member of this workspace.");
   }
 
-  const updated = await workspaceModel.updateMemberScope(workspace.id, req.params.employeeId, taskScope);
-  if (!updated) return notFound(res, "That person is not a member of this workspace.");
+  const [groups, teams] = await Promise.all([workspaceModel.findGroups(workspace.id), workspaceModel.findTeamsByWorkspace(workspace.id)]);
+  const groupIds = new Set(groups.map((group) => group.id));
+  const teamIds = new Set(teams.map((team) => team.id));
 
-  const members = await workspaceModel.findMembers(workspace.id);
-  res.json(mapMember(members.find((member) => member.employee_id === req.params.employeeId)));
+  const grants = [];
+  const workspaceLevel = req.body.workspace ?? null;
+  if (workspaceLevel !== null && !LEVELS.includes(workspaceLevel)) return badRequest(res, "Workspace access must be view or edit.");
+  if (workspaceLevel) grants.push({ scopeType: "workspace", scopeId: "", level: workspaceLevel });
+
+  for (const [groupId, level] of Object.entries(req.body.groups ?? {})) {
+    if (!level) continue;
+    if (!groupIds.has(groupId)) return badRequest(res, "One of the groups does not belong to this workspace.");
+    if (!LEVELS.includes(level)) return badRequest(res, "Group access must be view or edit.");
+    grants.push({ scopeType: "group", scopeId: groupId, level });
+  }
+  for (const [teamId, level] of Object.entries(req.body.teams ?? {})) {
+    if (!level) continue;
+    if (!teamIds.has(teamId)) return badRequest(res, "One of the teams does not belong to this workspace.");
+    if (!LEVELS.includes(level)) return badRequest(res, "Team access must be view or edit.");
+    grants.push({ scopeType: "team", scopeId: teamId, level });
+  }
+
+  await accessModel.replaceGrants(workspace.id, employeeId, grants);
+
+  const member = (await workspaceModel.findMembers(workspace.id)).find((row) => row.employee_id === employeeId);
+  res.json({ ...mapMember(member), grants: mapGrants(await accessModel.findGrants(workspace.id, employeeId)) });
 };
 
 const removeMember = async (req, res) => {
@@ -535,6 +591,6 @@ module.exports = {
   updateColumn,
   deleteColumn,
   addMember,
-  updateMember,
+  updateMemberAccess,
   removeMember
 };

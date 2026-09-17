@@ -13,15 +13,19 @@ export const ROUTES = {
 
   clients: '/clients',
   employees: '/employees',
+  employeeImport: '/employees/import',
   employeeDetail: '/employees/:employeeId',
   activity: '/activity',
+  performance: '/performance',
 
-  adminWorkspaces: '/admin/workspaces',
-  adminUserTypes: '/admin/user-types',
-  adminFeatures: '/admin/features',
-  adminDepartments: '/admin/departments',
-  adminDesignations: '/admin/designations',
-  adminAccounts: '/admin/accounts',
+  adminSetup: '/admin/setup',
+  adminWorkspaces: '/admin/setup/workspaces',
+  adminDepartments: '/admin/setup/departments',
+  adminDesignations: '/admin/setup/designations',
+  adminAccess: '/admin/access',
+  adminUserTypes: '/admin/access/user-types',
+  adminAccounts: '/admin/access/accounts',
+  adminFeatures: '/admin/access/features',
 
 }
 

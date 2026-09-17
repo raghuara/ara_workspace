@@ -22,7 +22,10 @@ import { taskService } from '@/api/taskService'
 import { PRIORITIES, PRIORITY_TONES, STATUS_TONES, TASK_SIZES, sizeByKey } from '@/constants/workspaceDomain'
 import { FEATURES } from '@/constants/features'
 import { useFeatures } from '@/hooks/useFeatures'
+import { usePermissions } from '@/hooks/usePermissions'
+import { PERMISSIONS } from '@/constants/permissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import { useAccess } from '@/hooks/useAccess'
 import { colors } from '@/theme/tokens'
 import { daysFromNow, formatRelativeDay, toIsoDate } from '@/utils/date'
 
@@ -65,27 +68,40 @@ const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, child
     {required && !filled ? (
       <Box
         aria-hidden="true"
-        sx={{ width: 6, height: 6, borderRadius: '50%', flexShrink: 0, bgcolor: missing ? STATUS_TONES.rose.strong : colors.border }}
+        sx={{
+          width: 6,
+          height: 6,
+          borderRadius: '50%',
+          flexShrink: 0,
+          bgcolor: missing ? STATUS_TONES.rose.strong : colors.border,
+        }}
       />
     ) : null}
   </Box>
 )
 
-export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, onCreated }) => {
-  const { activeWorkspaceId, groups, teams, clients, assignableMembers } = useWorkspace()
+export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamId, onCancel, onCreated, onSaved }) => {
+  const { activeWorkspaceId, clients, assignableMembers } = useWorkspace()
+  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam } = useAccess()
+  const groups = groupOptions(task?.groupId ?? null)
   const { isEnabled } = useFeatures()
+  const { can } = usePermissions()
+  const canAssign = can(PERMISSIONS.TASK_ASSIGN)
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
   const scheduled = column.kind === 'scheduled'
+  const isEditing = Boolean(task)
 
-  const [title, setTitle] = useState('')
+  const [title, setTitle] = useState(task?.title ?? '')
   const [values, setValues] = useState({
-    clientId: '',
-    groupId: defaultGroupId ?? '',
-    teamId: defaultTeamId ?? '',
-    assigneeIds: [],
-    priority: PRIORITIES.NORMAL,
-    sizeKey: 'M',
-    dueDate: scheduled ? daysFromNow(1) : toIsoDate(new Date()),
+    clientId: task?.clientId ?? '',
+    groupId:
+      task?.groupId ??
+      (groups.some((item) => item.id === defaultGroupId) ? defaultGroupId : groups.length === 1 ? groups[0].id : ''),
+    teamId: task?.teamId ?? (groups.some((item) => item.id === defaultGroupId) ? (defaultTeamId ?? '') : ''),
+    assigneeIds: task?.assigneeIds ?? [],
+    priority: task?.priority ?? PRIORITIES.NORMAL,
+    sizeKey: task?.sizeKey ?? 'M',
+    dueDate: task ? (task.scheduledDate ?? task.dueDate ?? '') : scheduled ? daysFromNow(1) : toIsoDate(new Date()),
   })
   const [menu, setMenu] = useState(null)
   const [missing, setMissing] = useState({})
@@ -114,7 +130,8 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
   const closeMenu = () => setMenu(null)
 
   const group = groups.find((item) => item.id === values.groupId)
-  const teamOptions = values.groupId ? teams.filter((team) => team.groupId === values.groupId) : []
+  const teamOptions = values.groupId ? teamOptionsFor(values.groupId, task?.teamId ?? null) : []
+  const noTeamAllowed = allowsNoTeam(values.groupId) || (task && task.groupId === values.groupId && !task.teamId)
   const team = teamOptions.find((item) => item.id === values.teamId)
   const client = clients.find((item) => item.id === values.clientId)
   const assignees = assignableMembers.filter((member) => values.assigneeIds.includes(member.employeeId))
@@ -126,7 +143,7 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
     if (!title.trim()) problems.title = true
     if (!values.clientId) problems.clientId = true
     if (!values.groupId) problems.groupId = true
-    if (values.assigneeIds.length === 0) problems.assigneeIds = true
+    if (canAssign && values.assigneeIds.length === 0) problems.assigneeIds = true
     setMissing(problems)
     if (Object.keys(problems).length > 0) {
       if (problems.title) inputRef.current?.focus()
@@ -136,23 +153,31 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
     setSubmitting(true)
     setError(null)
     try {
-      const saved = await taskService.createTask(activeWorkspaceId, {
+      const payload = {
         title: title.trim(),
-        description: '',
         clientId: values.clientId,
         groupId: values.groupId,
         teamId: values.teamId || null,
-        statusId: column.id,
-        assigneeIds: values.assigneeIds,
+        ...(canAssign ? { assigneeIds: values.assigneeIds } : {}),
         priority: values.priority,
         sizeKey: values.sizeKey,
         points: size.points,
         dueDate: values.dueDate || toIsoDate(new Date()),
         scheduledDate: scheduled ? values.dueDate || daysFromNow(1) : null,
-      })
-      onCreated(saved)
+      }
+      if (isEditing) {
+        const saved = await taskService.updateTask(task.id, payload)
+        onSaved?.(saved)
+      } else {
+        const saved = await taskService.createTask(activeWorkspaceId, {
+          ...payload,
+          description: '',
+          statusId: column.id,
+        })
+        onCreated?.(saved)
+      }
     } catch (caught) {
-      setError(caught?.message ?? 'The task could not be created.')
+      setError(caught?.message ?? (isEditing ? 'The task could not be saved.' : 'The task could not be created.'))
     } finally {
       setSubmitting(false)
     }
@@ -198,7 +223,10 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
             flex: 1,
             fontSize: '0.875rem',
             fontWeight: 600,
-            '& input::placeholder': { color: missing.title ? STATUS_TONES.rose.strong : colors.textSecondary, opacity: 1 },
+            '& input::placeholder': {
+              color: missing.title ? STATUS_TONES.rose.strong : colors.textSecondary,
+              opacity: 1,
+            },
           }}
         />
         <Button
@@ -217,29 +245,31 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
       </Stack>
 
       <Stack spacing={0.125}>
-        <QuickRow
-          icon={UserRound}
-          label="Add assignee"
-          required
-          filled={assignees.length > 0}
-          missing={missing.assigneeIds}
-          onClick={openMenu('assignee')}
-        >
-          {assignees.length > 0 ? (
-            <>
-              <Stack direction="row" sx={{ mr: 0.25 }}>
-                {assignees.slice(0, 3).map((member, index) => (
-                  <Box key={member.employeeId} sx={{ ml: index === 0 ? 0 : -0.5 }}>
-                    <UserAvatar name={member.fullName} size={20} />
-                  </Box>
-                ))}
-              </Stack>
-              <Typography variant="body2" noWrap>
-                {assignees.map((member) => member.fullName.split(' ')[0]).join(', ')}
-              </Typography>
-            </>
-          ) : null}
-        </QuickRow>
+        {canAssign ? (
+          <QuickRow
+            icon={UserRound}
+            label="Add assignee"
+            required
+            filled={assignees.length > 0}
+            missing={missing.assigneeIds}
+            onClick={openMenu('assignee')}
+          >
+            {assignees.length > 0 ? (
+              <>
+                <Stack direction="row" sx={{ mr: 0.25 }}>
+                  {assignees.slice(0, 3).map((member, index) => (
+                    <Box key={member.employeeId} sx={{ ml: index === 0 ? 0 : -0.5 }}>
+                      <UserAvatar name={member.fullName} size={20} />
+                    </Box>
+                  ))}
+                </Stack>
+                <Typography variant="body2" noWrap>
+                  {assignees.map((member) => member.fullName.split(' ')[0]).join(', ')}
+                </Typography>
+              </>
+            ) : null}
+          </QuickRow>
+        ) : null}
 
         <QuickRow icon={CalendarDays} label="Add dates" filled={Boolean(values.dueDate)} onClick={openMenu('date')}>
           {values.dueDate ? (
@@ -328,7 +358,11 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
                   <ListItemIcon>
                     <UserAvatar name={member.fullName} size={24} />
                   </ListItemIcon>
-                  <ListItemText primary={member.fullName} secondary={member.designation} slotProps={{ primary: { fontSize: '0.8125rem' }, secondary: { fontSize: '0.75rem' } }} />
+                  <ListItemText
+                    primary={member.fullName}
+                    secondary={member.designation}
+                    slotProps={{ primary: { fontSize: '0.8125rem' }, secondary: { fontSize: '0.75rem' } }}
+                  />
                   {selected ? <Check size={15} strokeWidth={2} color={colors.brand} aria-hidden="true" /> : null}
                 </MenuItem>
               )
@@ -346,7 +380,12 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
                 }}
               >
                 <ListItemIcon>
-                  <Flag size={14} strokeWidth={2} color={STATUS_TONES[PRIORITY_TONES[priority]].strong} aria-hidden="true" />
+                  <Flag
+                    size={14}
+                    strokeWidth={2}
+                    color={STATUS_TONES[PRIORITY_TONES[priority]].strong}
+                    aria-hidden="true"
+                  />
                 </ListItemIcon>
                 <ListItemText primary={priority} slotProps={{ primary: { fontSize: '0.8125rem' } }} />
               </MenuItem>
@@ -379,7 +418,14 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
                 }}
               >
                 <ListItemIcon>
-                  <Box sx={{ width: 9, height: 9, borderRadius: '3px', bgcolor: (STATUS_TONES[item.tone] ?? STATUS_TONES.slate).strong }} />
+                  <Box
+                    sx={{
+                      width: 9,
+                      height: 9,
+                      borderRadius: '3px',
+                      bgcolor: (STATUS_TONES[item.tone] ?? STATUS_TONES.slate).strong,
+                    }}
+                  />
                 </ListItemIcon>
                 <ListItemText primary={item.name} slotProps={{ primary: { fontSize: '0.8125rem' } }} />
               </MenuItem>
@@ -388,17 +434,22 @@ export const QuickAddCard = ({ column, defaultGroupId, defaultTeamId, onCancel, 
 
         {menu?.kind === 'team'
           ? [
-              <MenuItem
-                key="none"
-                selected={!values.teamId}
-                onClick={() => {
-                  set({ teamId: '' })
-                  closeMenu()
-                }}
-              >
-                <ListItemText primary="No team" slotProps={{ primary: { fontSize: '0.8125rem', color: colors.textSecondary } }} />
-              </MenuItem>,
-              <Divider key="divider" />,
+              noTeamAllowed ? (
+                <MenuItem
+                  key="none"
+                  selected={!values.teamId}
+                  onClick={() => {
+                    set({ teamId: '' })
+                    closeMenu()
+                  }}
+                >
+                  <ListItemText
+                    primary="No team"
+                    slotProps={{ primary: { fontSize: '0.8125rem', color: colors.textSecondary } }}
+                  />
+                </MenuItem>
+              ) : null,
+              noTeamAllowed ? <Divider key="divider" /> : null,
               ...teamOptions.map((item) => (
                 <MenuItem
                   key={item.id}

@@ -28,6 +28,9 @@ const mapClient = (row) => ({
 const canAccessWorkspace = async (req, workspaceId) =>
   req.user.userTypeId === USER_TYPE.MASTER_ADMIN || workspaceModel.isMember(workspaceId, req.user.employeeId);
 
+const allowedWorkspaceIds = async (req) =>
+  req.user.userTypeId === USER_TYPE.MASTER_ADMIN ? null : workspaceModel.findWorkspaceIdsForEmployee(req.user.employeeId);
+
 const validationFailed = (res, message, errors) =>
   res.status(400).json({ message, code: "VALIDATION_ERROR", errors });
 
@@ -66,6 +69,7 @@ const listClients = async (req, res) => {
 
   const { rows, total } = await clientModel.findClients({
     workspaceId,
+    workspaceIds: workspaceId ? null : await allowedWorkspaceIds(req),
     search: text(req.query.search),
     status: text(req.query.status),
     page,
@@ -81,7 +85,7 @@ const listClientOptions = async (req, res) => {
     return res.status(403).json({ message: "You do not have access to this workspace.", code: "FORBIDDEN" });
   }
 
-  res.json(await clientModel.findClientOptions(workspaceId));
+  res.json(await clientModel.findClientOptions(workspaceId, workspaceId ? null : await allowedWorkspaceIds(req)));
 };
 
 const createClient = async (req, res) => {

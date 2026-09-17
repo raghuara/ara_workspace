@@ -15,7 +15,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Building2, Eye, Layers, Pencil, Plus, Trash2, UsersRound } from 'lucide-react'
+import { Building2, KeyRound, Layers, Pencil, Plus, Trash2, UsersRound } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
 import { SectionCard } from '@/components/SectionCard'
 import { EmptyState } from '@/components/EmptyState'
@@ -23,10 +23,11 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { PeoplePicker } from '@/components/PeoplePicker'
+import { TonePicker } from '@/components/TonePicker'
+import { MemberAccessDialog } from './MemberAccessDialog'
 import { workspaceService } from '@/api/workspaceService'
 import { employeeService } from '@/api/employeeService'
 import { PERMISSIONS } from '@/constants/permissions'
-import { TONE_KEYS } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
@@ -74,7 +75,16 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
           ) : null}
           <Stack spacing={1.5} sx={{ pt: 1 }}>
             {fields.map((field) =>
-              field.people ? (
+              field.tone ? (
+                <TonePicker
+                  key={field.name}
+                  label={field.label}
+                  value={values[field.name]}
+                  onChange={(next) => setValues((c) => ({ ...c, [field.name]: next }))}
+                  previewLabel={values.name}
+                  helperText={field.helperText}
+                />
+              ) : field.people ? (
                 <PeoplePicker
                   key={field.name}
                   label={field.label}
@@ -155,28 +165,70 @@ export const WorkspaceAdminPage = () => {
     refreshWorkspaces,
     selectWorkspace,
   } = useWorkspace()
-  const [scopeBusyId, setScopeBusyId] = useState(null)
-  const [scopeError, setScopeError] = useState('')
+  const [accessMember, setAccessMember] = useState(null)
 
-  const changeScope = async (member, taskScope) => {
-    setScopeError('')
-    setScopeBusyId(member.employeeId)
-    try {
-      await workspaceService.updateMember(activeWorkspaceId, member.employeeId, { taskScope })
-      refreshStructure()
-    } catch (caught) {
-      setScopeError(caught.message ?? 'The visibility setting could not be saved.')
-    } finally {
-      setScopeBusyId(null)
-    }
+  const summariseAccess = (member) => {
+    const grants = member.grants ?? { workspace: null, groups: {}, teams: {} }
+    const edits =
+      Object.values(grants.groups).filter((level) => level === 'edit').length +
+      Object.values(grants.teams).filter((level) => level === 'edit').length
+    const views =
+      Object.values(grants.groups).filter((level) => level === 'view').length +
+      Object.values(grants.teams).filter((level) => level === 'view').length
+    if (grants.workspace === 'edit') return { label: 'Whole workspace · Edit', tone: 'green' }
+    if (grants.workspace === 'view')
+      return { label: edits ? `Workspace · View, ${edits} edit` : 'Whole workspace · View', tone: 'amber' }
+    if (edits || views)
+      return {
+        label: [edits ? `${edits} edit` : null, views ? `${views} view` : null].filter(Boolean).join(' · '),
+        tone: edits ? 'teal' : 'amber',
+      }
+    return { label: 'Own tasks only', tone: 'gray' }
   }
 
-  const people = useAsync(employeeService.getEmployeeOptions, [])
+  const people = useAsync(employeeService.getEmployeeOptions, [activeWorkspaceId], {
+    enabled: Boolean(activeWorkspaceId),
+  })
+  const everyone = useAsync(employeeService.getEmployeeOptions, [undefined], {
+    enabled: can(PERMISSIONS.WORKSPACE_CREATE),
+  })
   const [dialog, setDialog] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null)
   const [deleteError, setDeleteError] = useState('')
 
   const peopleOptions = people.data ?? []
+  const everyoneOptions = everyone.data ?? []
+
+  const openEditWorkspace = (workspace) =>
+    setDialog({
+      title: `Edit ${workspace.name}`,
+      submitLabel: 'Save workspace',
+      fields: [
+        { name: 'name', label: 'Workspace name', required: true, initial: workspace.name },
+        {
+          name: 'shortName',
+          label: 'Short code',
+          helperText: 'Two or three letters shown on the switcher.',
+          initial: workspace.shortName,
+        },
+        { name: 'description', label: 'Description', multiline: true, initial: workspace.description ?? '' },
+        { name: 'tone', label: 'Colour', tone: true, initial: workspace.tone },
+        {
+          name: 'adminIds',
+          label: 'Workspace admins',
+          people: everyoneOptions.length ? everyoneOptions : peopleOptions,
+          multiple: true,
+          required: true,
+          initial: workspace.adminIds ?? [],
+          helperText: 'Admins see everything in this workspace. Keep at least one.',
+        },
+      ],
+      onSubmit: async (values) => {
+        await workspaceService.updateWorkspace(workspace.id, values)
+        await refreshWorkspaces()
+        refreshStructure()
+      },
+    })
 
   const confirmDelete = async () => {
     setDeleteError('')
@@ -195,7 +247,7 @@ export const WorkspaceAdminPage = () => {
       <PageHeader
         title="Workspaces"
         description="One account can run several companies. Each workspace has its own board, clients, members and admin."
-        breadcrumbs={[{ label: 'Administration' }, { label: 'Workspaces' }]}
+        breadcrumbs={[{ label: 'Administration' }, { label: 'Setup' }, { label: 'Workspaces' }]}
         actions={
           can(PERMISSIONS.WORKSPACE_CREATE) ? (
             <Button
@@ -213,13 +265,14 @@ export const WorkspaceAdminPage = () => {
                       helperText: 'Two or three letters shown on the switcher.',
                     },
                     { name: 'description', label: 'Description', multiline: true },
+                    { name: 'tone', label: 'Colour', tone: true, initial: 'blue' },
                     {
-                      name: 'tone',
-                      label: 'Colour',
-                      options: TONE_KEYS.map((t) => ({ value: t, label: t })),
-                      initial: 'blue',
+                      name: 'adminId',
+                      label: 'Workspace admin',
+                      people: everyoneOptions,
+                      helperText:
+                        'Pick yourself to start, then onboard the real admin inside the new workspace and hand it over.',
                     },
-                    { name: 'adminId', label: 'Workspace admin', people: peopleOptions },
                   ],
                   onSubmit: async (values) => {
                     await workspaceService.createWorkspace({
@@ -265,6 +318,20 @@ export const WorkspaceAdminPage = () => {
                   {workspace.name}
                 </Typography>
                 {active ? <ToneChip label="Active" tone="green" /> : null}
+                {can(PERMISSIONS.WORKSPACE_UPDATE) ? (
+                  <Tooltip title="Edit workspace">
+                    <IconButton
+                      size="small"
+                      aria-label={`Edit ${workspace.name}`}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        openEditWorkspace(workspace)
+                      }}
+                    >
+                      <Pencil size={15} strokeWidth={1.75} />
+                    </IconButton>
+                  </Tooltip>
+                ) : null}
               </Stack>
               <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
                 {workspace.description}
@@ -294,12 +361,7 @@ export const WorkspaceAdminPage = () => {
                   submitLabel: 'Create group',
                   fields: [
                     { name: 'name', label: 'Group name', required: true },
-                    {
-                      name: 'tone',
-                      label: 'Colour',
-                      options: TONE_KEYS.map((t) => ({ value: t, label: t })),
-                      initial: 'blue',
-                    },
+                    { name: 'tone', label: 'Colour', tone: true, initial: 'blue' },
                     { name: 'leadId', label: 'Group lead', people: peopleOptions },
                   ],
                   onSubmit: async (values) => {
@@ -486,11 +548,6 @@ export const WorkspaceAdminPage = () => {
           description="Who belongs to this workspace and how much of the board each person sees"
           padded={false}
         >
-          {scopeError ? (
-            <Alert severity="error" sx={{ m: 2 }} onClose={() => setScopeError('')}>
-              {scopeError}
-            </Alert>
-          ) : null}
           {members.length === 0 ? (
             <EmptyState
               icon={UsersRound}
@@ -500,7 +557,8 @@ export const WorkspaceAdminPage = () => {
           ) : (
             <Stack>
               {members.map((member) => {
-                const seesEverything = member.userTypeId === 1 || member.userTypeId === 2
+                const isAdmin = member.userTypeId === 1 || (activeWorkspace?.adminIds ?? []).includes(member.employeeId)
+                const summary = summariseAccess(member)
                 return (
                   <Stack
                     key={member.employeeId}
@@ -525,35 +583,23 @@ export const WorkspaceAdminPage = () => {
                         </Typography>
                       </Box>
                     </Stack>
-                    <ToneChip label={member.userTypeName} tone={seesEverything ? 'violet' : 'slate'} />
-                    {seesEverything ? (
-                      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 200 }}>
-                        Sees every task
-                      </Typography>
-                    ) : can(PERMISSIONS.WORKSPACE_UPDATE) ? (
-                      <TextField
-                        select
-                        size="small"
-                        value={member.taskScope ?? 'team'}
-                        disabled={scopeBusyId === member.employeeId}
-                        onChange={(event) => changeScope(member, event.target.value)}
-                        sx={{ minWidth: 200 }}
-                        slotProps={{
-                          select: { 'aria-label': `Task visibility for ${member.fullName}` },
-                          input: {
-                            startAdornment: (
-                              <Eye size={14} strokeWidth={1.75} style={{ marginRight: 8 }} aria-hidden="true" />
-                            ),
-                          },
-                        }}
-                      >
-                        <MenuItem value="own">Own tasks only</MenuItem>
-                        <MenuItem value="team">Own + team tasks</MenuItem>
-                      </TextField>
+                    <ToneChip label={member.userTypeName} tone={isAdmin ? 'violet' : 'slate'} />
+                    {isAdmin ? (
+                      <ToneChip label="Full access (admin)" tone="violet" icon={KeyRound} />
                     ) : (
-                      <Typography variant="caption" color="text.secondary" sx={{ minWidth: 200 }}>
-                        {member.taskScope === 'own' ? 'Own tasks only' : 'Own + team tasks'}
-                      </Typography>
+                      <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                        <ToneChip label={summary.label} tone={summary.tone} />
+                        {can(PERMISSIONS.WORKSPACE_UPDATE) ? (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            startIcon={<KeyRound size={14} strokeWidth={1.75} />}
+                            onClick={() => setAccessMember(member)}
+                          >
+                            Access
+                          </Button>
+                        ) : null}
+                      </Stack>
                     )}
                   </Stack>
                 )
@@ -568,6 +614,19 @@ export const WorkspaceAdminPage = () => {
       ) : null}
 
       {dialog ? <SimpleFormDialog {...dialog} onClose={() => setDialog(null)} /> : null}
+
+      {accessMember ? (
+        <MemberAccessDialog
+          workspaceId={activeWorkspaceId}
+          member={accessMember}
+          groups={groups}
+          onClose={() => setAccessMember(null)}
+          onSaved={() => {
+            setAccessMember(null)
+            refreshStructure()
+          }}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={Boolean(deleteTarget)}

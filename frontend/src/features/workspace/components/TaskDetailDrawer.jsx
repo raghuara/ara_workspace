@@ -1,14 +1,4 @@
-import {
-  Box,
-  Button,
-  Divider,
-  Drawer,
-  IconButton,
-  MenuItem,
-  Stack,
-  TextField,
-  Typography,
-} from '@mui/material'
+import { Box, Button, Divider, Drawer, IconButton, MenuItem, Stack, TextField, Typography } from '@mui/material'
 import { Pencil, Repeat, Trash2, X } from 'lucide-react'
 import { Link as RouterLink } from 'react-router-dom'
 import { StatusChip } from '@/components/StatusChip'
@@ -22,6 +12,7 @@ import { PERMISSIONS } from '@/constants/permissions'
 import { ROUTES } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useAccess } from '@/hooks/useAccess'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { TaskAttachments } from './TaskAttachments'
 import { colors } from '@/theme/tokens'
@@ -48,6 +39,8 @@ const describeDetail = (entry) => {
 export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
   const { columns } = useWorkspace()
   const { can } = usePermissions()
+  const { canEditTask } = useAccess()
+  const editable = canEditTask(task)
 
   const history = useAsync(taskService.getTaskHistory, [task?.id], { enabled: Boolean(task) })
 
@@ -92,12 +85,12 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
         <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 2, pt: 1.5, pb: 1 }}>
           <StatusChip label={task.statusName} tone={task.statusTone} sx={{ minWidth: 0 }} />
           <Box sx={{ flex: 1 }} />
-          {can(PERMISSIONS.TASK_UPDATE) ? (
+          {editable && can(PERMISSIONS.TASK_UPDATE) ? (
             <IconButton size="small" aria-label="Edit task" onClick={() => onEdit?.(task)} sx={{ color: tone.strong }}>
               <Pencil size={16} strokeWidth={1.75} />
             </IconButton>
           ) : null}
-          {can(PERMISSIONS.TASK_DELETE) ? (
+          {editable && can(PERMISSIONS.TASK_DELETE) ? (
             <IconButton size="small" aria-label="Delete task" onClick={remove} sx={{ color: tone.strong }}>
               <Trash2 size={16} strokeWidth={1.75} />
             </IconButton>
@@ -123,7 +116,19 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
 
       <Box sx={{ p: 2, overflowY: 'auto' }}>
         {task.recurringId ? (
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 2, px: 1.25, py: 0.875, borderRadius: 2, bgcolor: colors.brandSoft, border: `1px solid ` }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              alignItems: 'center',
+              mb: 2,
+              px: 1.25,
+              py: 0.875,
+              borderRadius: 2,
+              bgcolor: colors.brandSoft,
+              border: `1px solid `,
+            }}
+          >
             <Repeat size={14} strokeWidth={2} color={colors.brand} aria-hidden="true" />
             <Typography variant="caption" sx={{ flex: 1, color: colors.brandDark }}>
               Created automatically from a recurring task{task.recurringTitle ? `: ` : ''}
@@ -133,7 +138,7 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
             </Button>
           </Stack>
         ) : null}
-        {can(PERMISSIONS.TASK_MOVE) ? (
+        {editable && can(PERMISSIONS.TASK_MOVE) ? (
           <TextField
             select
             size="small"
@@ -155,7 +160,10 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
           columns={{ xs: 1, sm: 2, lg: 2 }}
           items={[
             { label: 'Team', value: task.teamName },
-            { label: 'Due', value: task.dueDate ? `${formatDate(task.dueDate)} · ${formatRelativeDay(task.dueDate)}` : '—' },
+            {
+              label: 'Due',
+              value: task.dueDate ? `${formatDate(task.dueDate)} · ${formatRelativeDay(task.dueDate)}` : '—',
+            },
             { label: 'Scheduled', value: task.scheduledDate ? formatDate(task.scheduledDate) : '—' },
             { label: 'Completed', value: task.completedAt ? formatDate(task.completedAt) : 'Not yet' },
             { label: 'Created', value: formatDate(task.createdAt) },
@@ -190,7 +198,7 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
 
         <Divider sx={{ my: 2.5 }} />
 
-        <TaskAttachments taskId={task.id} canEdit={can(PERMISSIONS.TASK_UPDATE)} />
+        <TaskAttachments taskId={task.id} canEdit={editable && can(PERMISSIONS.TASK_UPDATE)} />
 
         <Divider sx={{ my: 2.5 }} />
 
@@ -219,12 +227,7 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
                   )}
                 </Stack>
                 <Box sx={{ pb: index === list.length - 1 ? 0 : 2.25, minWidth: 0, flex: 1 }}>
-                  <Stack
-                    direction="row"
-                    spacing={0.75}
-                    useFlexGap
-                    sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-                  >
+                  <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
                     <Typography variant="body2" fontWeight={600}>
                       {entry.actorName}
                     </Typography>

@@ -18,7 +18,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Eye, Plus, RotateCcw, Users } from 'lucide-react'
+import { Eye, FileSpreadsheet, Plus, RotateCcw, Users } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import { SearchField } from '@/components/SearchField'
@@ -31,10 +31,11 @@ import { departmentService } from '@/api/catalogService'
 import { employeeService } from '@/api/employeeService'
 import { EMPLOYMENT_STATUS } from '@/constants/domain'
 import { PERMISSIONS } from '@/constants/permissions'
-import { employeeDetailPath } from '@/constants/routes'
+import { ROUTES, employeeDetailPath } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useWorkspace } from '@/hooks/useWorkspace'
 import { EmployeeFormDialog } from './EmployeeFormDialog'
 import { formatDate } from '@/utils/date'
 import { pluralize } from '@/utils/format'
@@ -46,6 +47,7 @@ export const EmployeeListPage = () => {
   const navigate = useNavigate()
   const { can } = usePermissions()
   const canOnboard = can(PERMISSIONS.EMPLOYEE_UPDATE)
+  const { activeWorkspaceId, activeWorkspace } = useWorkspace()
   const [formOpen, setFormOpen] = useState(false)
 
   const [department, setDepartment] = useState('')
@@ -68,12 +70,14 @@ export const EmployeeListPage = () => {
   }
 
   const query = useMemo(
-    () => ({ search: debouncedSearch, department, status, page: page + 1, pageSize }),
-    [debouncedSearch, department, status, page, pageSize],
+    () => ({ workspaceId: activeWorkspaceId, search: debouncedSearch, department, status, page: page + 1, pageSize }),
+    [activeWorkspaceId, debouncedSearch, department, status, page, pageSize],
   )
 
   const { data, loading, error, reload } = useAsync(employeeService.listEmployees, [query])
-  const { data: departments } = useAsync(departmentService.list, [])
+  const { data: departments } = useAsync(departmentService.list, [{ workspaceId: activeWorkspaceId }], {
+    enabled: Boolean(activeWorkspaceId),
+  })
 
   const hasFilters = Boolean(search || department || status)
 
@@ -88,17 +92,27 @@ export const EmployeeListPage = () => {
     <Box>
       <PageHeader
         title="Employees"
-        description="Browse the employee directory, filter by department or status, and open a profile for full details."
+        description={`${activeWorkspace ? `People at ${activeWorkspace.name}. ` : ''}Filter by department or status, and open a profile for full details.`}
         breadcrumbs={[{ label: 'Employees' }]}
         actions={
           canOnboard ? (
-            <Button
-              variant="contained"
-              startIcon={<Plus size={16} strokeWidth={2} aria-hidden="true" />}
-              onClick={() => setFormOpen(true)}
-            >
-              Onboard employee
-            </Button>
+            <>
+              <Button
+                component={Link}
+                to={ROUTES.employeeImport}
+                variant="outlined"
+                startIcon={<FileSpreadsheet size={16} strokeWidth={2} aria-hidden="true" />}
+              >
+                Import from Excel
+              </Button>
+              <Button
+                variant="contained"
+                startIcon={<Plus size={16} strokeWidth={2} aria-hidden="true" />}
+                onClick={() => setFormOpen(true)}
+              >
+                Onboard employee
+              </Button>
+            </>
           ) : null
         }
       />
@@ -108,7 +122,7 @@ export const EmployeeListPage = () => {
         onClose={() => setFormOpen(false)}
         onSaved={(created) => {
           setFormOpen(false)
-          navigate(employeeDetailPath(created.id))
+          navigate(employeeDetailPath(created.id), { state: { employee: created, onboarded: true } })
         }}
       />
 
@@ -256,9 +270,7 @@ export const EmployeeListPage = () => {
                   setPage(0)
                 }}
                 rowsPerPageOptions={[10, 25, 50]}
-                labelDisplayedRows={({ from, to, count }) =>
-                  `${from}–${to} of ${pluralize(count, 'employee')}`
-                }
+                labelDisplayedRows={({ from, to, count }) => `${from}–${to} of ${pluralize(count, 'employee')}`}
               />
             </>
           ) : null}
