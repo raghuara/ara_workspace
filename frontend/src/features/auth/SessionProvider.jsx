@@ -3,6 +3,7 @@ import { Box, Button, CircularProgress, Stack, Typography } from '@mui/material'
 import { authService } from '@/api/authService'
 import { sessionService } from '@/api/sessionService'
 import { isUnauthorized } from '@/api/httpClient'
+import { queryClient } from '@/api/queryClient'
 import { SessionContext } from './sessionContext'
 import logoUrl from '@/assets/logo.png'
 
@@ -60,6 +61,7 @@ export const SessionProvider = ({ children }) => {
 
   const login = useCallback(async (credentials) => {
     const result = await authService.login(credentials)
+    queryClient.clear()
     const loadedRoles = await sessionService.listRoles().catch(() => [])
     setSession(result.session)
     setRoles(loadedRoles)
@@ -69,6 +71,7 @@ export const SessionProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     await authService.logout()
+    queryClient.clear()
     setSession(null)
     setRoles([])
     setStatus(STATUS.ANONYMOUS)
@@ -76,6 +79,7 @@ export const SessionProvider = ({ children }) => {
 
   const switchRole = useCallback(async (roleId) => {
     const updated = await sessionService.switchRole(roleId)
+    queryClient.clear()
     setSession(updated)
     return updated
   }, [])

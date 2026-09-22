@@ -2,6 +2,7 @@ const activityModel = require("../models/activity.model");
 const workspaceModel = require("../models/workspace.model");
 const { HISTORY_ACTIONS } = require("../constants/admin");
 const { USER_TYPE } = require("../constants/workspace");
+const { periodFrom } = require("../utils/period");
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
@@ -47,7 +48,8 @@ const listActivity = async (req, res) => {
       workspaceId: text(req.query.workspaceId),
       search: text(req.query.search),
       action: HISTORY_ACTIONS.includes(action) ? action : "",
-      actorId: text(req.query.actorId)
+      actorId: text(req.query.actorId),
+      ...periodFrom(req.query)
     },
     page,
     pageSize

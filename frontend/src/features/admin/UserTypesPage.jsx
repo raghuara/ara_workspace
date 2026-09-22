@@ -32,8 +32,13 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useSession } from '@/hooks/useSession'
 import { colors, layout } from '@/theme/tokens'
 
-const TOTAL_PERMISSIONS = PERMISSION_CATALOG.reduce((sum, group) => sum + group.permissions.length, 0)
-const CATALOG_KEYS = new Set(PERMISSION_CATALOG.flatMap((group) => group.permissions.map((p) => p.key)))
+const isSectionAllowed = (userType, group) => !userType.permissionSections || userType.permissionSections.includes(group.key)
+const allowedKeysFor = (userType) =>
+  new Set(
+    PERMISSION_CATALOG.filter((group) => isSectionAllowed(userType, group)).flatMap((group) =>
+      group.permissions.map((permission) => permission.key),
+    ),
+  )
 
 /** Create a new type, or edit the name / description / colour of an existing one. */
 const UserTypeDialog = ({ userType, onClose, onSaved }) => {
@@ -144,6 +149,10 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
 
   const locked = userType.permissionsLocked
   const readOnly = locked || !canManage
+  const restricted = Boolean(userType.permissionSections)
+  const sections = [...PERMISSION_CATALOG].sort(
+    (a, b) => Number(isSectionAllowed(userType, b)) - Number(isSectionAllowed(userType, a)),
+  )
   const sameAsSaved = (next) => JSON.stringify([...next].sort()) === JSON.stringify([...userType.permissions].sort())
   const dirty = !sameAsSaved(draft)
 
@@ -162,7 +171,10 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
   const save = async () => {
     setState({ saving: true, message: '', error: '' })
     try {
-      await adminService.updateUserType(userType.id, { permissions: draft })
+      const allowedKeys = allowedKeysFor(userType)
+      await adminService.updateUserType(userType.id, {
+        permissions: restricted ? draft.filter((key) => allowedKeys.has(key)) : draft,
+      })
       await onSaved()
       await refreshSession()
       onDirtyChange(false)
@@ -227,7 +239,9 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
             <strong>System user type.</strong> It cannot be renamed or deleted.{' '}
             {locked
               ? 'Master Admin permissions are fixed — removing them could leave nobody able to reach this screen.'
-              : 'Its permissions can still be adjusted to suit your organisation.'}
+              : restricted
+                ? `${userType.name} can only be given task permissions — tick exactly what they may do with the tasks assigned to them. Every other section stays off; give someone a different user type if they need more.`
+                : 'Its permissions can still be adjusted to suit your organisation.'}
           </Alert>
         ) : null}
         {!canManage ? (
@@ -247,13 +261,15 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
         ) : null}
 
         <Stack spacing={2}>
-          {PERMISSION_CATALOG.map((group) => {
+          {sections.map((group) => {
             const keys = group.permissions.map((permission) => permission.key)
-            const onCount = keys.filter((key) => draft.includes(key)).length
+            const allowed = isSectionAllowed(userType, group)
+            const onCount = allowed ? keys.filter((key) => draft.includes(key)).length : 0
             const allOn = onCount === keys.length
+            const groupReadOnly = readOnly || !allowed
 
             return (
-              <Box key={group.key}>
+              <Box key={group.key} sx={allowed ? undefined : { opacity: 0.5 }} aria-disabled={!allowed || undefined}>
                 <Stack direction="row" sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                   <Box>
                     <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
@@ -264,7 +280,7 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
                       />
                     </Stack>
                     <Typography variant="caption" component="p">
-                      {group.description}
+                      {allowed ? group.description : `Not available for ${userType.name}`}
                     </Typography>
                   </Box>
                   <FormControlLabel
@@ -273,7 +289,7 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
                         size="small"
                         checked={allOn}
                         indeterminate={onCount > 0 && !allOn}
-                        disabled={readOnly}
+                        disabled={groupReadOnly}
                         onChange={(event) => toggleGroup(group, event.target.checked)}
                       />
                     }
@@ -289,8 +305,8 @@ const PermissionEditor = ({ userType, canManage, onSaved, onDirtyChange, onEdit,
                       control={
                         <Checkbox
                           size="small"
-                          checked={draft.includes(permission.key)}
-                          disabled={readOnly}
+                          checked={allowed && draft.includes(permission.key)}
+                          disabled={groupReadOnly}
                           onChange={() => toggle(permission.key)}
                         />
                       }
@@ -461,7 +477,9 @@ export const UserTypesPage = () => {
               <Stack>
                 {userTypes?.map((type) => {
                   const active = selected?.id === type.id
-                  const granted = type.permissions.filter((key) => CATALOG_KEYS.has(key)).length
+                  const allowedKeys = allowedKeysFor(type)
+                  const granted = type.permissions.filter((key) => allowedKeys.has(key)).length
+                  const available = allowedKeys.size
                   return (
                     <Box
                       key={type.id}
@@ -507,14 +525,14 @@ export const UserTypesPage = () => {
                         >
                           <Box
                             sx={{
-                              width: `${(granted / TOTAL_PERMISSIONS) * 100}%`,
+                              width: `${available ? (granted / available) * 100 : 0}%`,
                               height: '100%',
                               bgcolor: colors.brand,
                             }}
                           />
                         </Box>
                         <Typography variant="caption" sx={{ whiteSpace: 'nowrap' }}>
-                          {granted}/{TOTAL_PERMISSIONS} · {type.memberCount}{' '}
+                          {granted}/{available} · {type.memberCount}{' '}
                           {type.memberCount === 1 ? 'person' : 'people'}
                         </Typography>
                       </Stack>

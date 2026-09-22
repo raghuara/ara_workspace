@@ -205,7 +205,7 @@ export const WorkspaceNavTree = ({ onNavigate }) => {
           />
         ))}
 
-        {groups.length === 0 ? (
+        {groups.length === 0 && can(PERMISSIONS.GROUP_MANAGE) ? (
           <Tooltip title="Add groups under Administration → Workspaces">
             <Typography variant="caption" component="p" sx={{ px: 2, py: 1 }}>
               No groups yet

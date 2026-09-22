@@ -1,28 +1,7 @@
 import { useState } from 'react'
 import { Box, Stack, Typography } from '@mui/material'
 import { colors } from '@/theme/tokens'
-
-/**
- * Colours used only inside charts. They map the app's tone names onto fills
- * that read well as bars and ring segments: brighter than the chip palette, and
- * the two neutral tones become sky and indigo so a chart never shows grey.
- */
-const CHART_COLORS = {
-  blue: '#2563EB',
-  violet: '#7C3AED',
-  teal: '#0D9488',
-  amber: '#F59E0B',
-  rose: '#F43F5E',
-  green: '#22C55E',
-  orange: '#F97316',
-  pink: '#EC4899',
-  slate: '#0EA5E9',
-  gray: '#6366F1',
-}
-
-const fillFor = (tone) => CHART_COLORS[tone] ?? CHART_COLORS.blue
-// 8-digit hex: a ~9% wash of the fill, used for the hover band behind a bar.
-const washFor = (tone) => `${fillFor(tone)}17`
+import { CHART_COLORS, fillFor, washFor } from './chartColors'
 
 const niceScale = (max, tickCount = 4) => {
   if (max <= 0) return { max: tickCount, ticks: Array.from({ length: tickCount + 1 }, (_, i) => i) }

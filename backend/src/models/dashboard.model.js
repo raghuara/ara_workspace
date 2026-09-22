@@ -35,7 +35,9 @@ const loadWorkspaceSnapshot = async (workspaceId) => {
       pool.query("SELECT id, name, tone FROM clients WHERE workspace_id = ?", [workspaceId]),
       pool.query(
         `SELECT id, group_id, team_id, client_id, status_id, priority, points,
-                DATE_FORMAT(due_date, '%Y-%m-%d') AS due_date
+                DATE_FORMAT(due_date, '%Y-%m-%d') AS due_date,
+                DATE_FORMAT(completed_at, '%Y-%m-%d') AS completed_at,
+                DATE_FORMAT(created_at, '%Y-%m-%d') AS created_at
          FROM tasks WHERE workspace_id = ?`,
         [workspaceId]
       ),
@@ -89,6 +91,8 @@ const loadWorkspaceSnapshot = async (workspaceId) => {
       priority: row.priority,
       points: row.points,
       dueDate: row.due_date,
+      completedAt: row.completed_at,
+      createdAt: row.created_at,
       assigneeIds: assigneesByTask.get(row.id) ?? []
     })),
     correctionMoveTaskIds: correctionMoves.map((row) => row.task_id)

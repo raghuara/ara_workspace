@@ -35,6 +35,7 @@ const mapEmployee = (row) => ({
   workLocation: row.work_location,
   reportingManagerId: row.reporting_manager_id,
   reportingManager: row.reporting_manager || null,
+  loginUserTypeId: row.login_user_type_id ?? null,
   avatarUrl: null
 });
 

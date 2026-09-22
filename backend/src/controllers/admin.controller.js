@@ -1,6 +1,28 @@
 const adminModel = require("../models/admin.model");
 const { FEATURES, AUTOMATION_RULES } = require("../constants/admin");
-const { TONES } = require("../constants/workspace");
+const { TONES, USER_TYPE } = require("../constants/workspace");
+
+const TASK_PERMISSIONS = [
+  "task.view",
+  "task.create",
+  "task.update",
+  "task.delete",
+  "task.assign",
+  "task.move",
+  "task.weightage.set",
+  "task.recurring"
+];
+
+// User types that may only hold permissions from certain sections of the catalogue.
+const RESTRICTED_TYPES = {
+  [USER_TYPE.EMPLOYEE]: { sections: ["task"], permissions: TASK_PERMISSIONS }
+};
+
+const restrictionFor = (userTypeId) => RESTRICTED_TYPES[userTypeId] ?? null;
+const withinRestriction = (userTypeId, permissions) => {
+  const restriction = restrictionFor(userTypeId);
+  return restriction ? permissions.filter((key) => restriction.permissions.includes(key)) : permissions;
+};
 
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 const tone = (value, fallback) => (TONES.includes(value) ? value : fallback);
@@ -26,10 +48,11 @@ const mapUserType = (row) => ({
   slug: row.slug,
   description: row.description ?? "",
   isSystem: Boolean(row.is_system),
-  permissionsLocked: Boolean(row.permissions_locked),
+  permissionsLocked: Boolean(row.permissions_locked) && !restrictionFor(row.id),
+  permissionSections: restrictionFor(row.id)?.sections ?? null,
   tone: row.tone,
   memberCount: row.member_count,
-  permissions: parseJson(row.permissions, [])
+  permissions: withinRestriction(row.id, parseJson(row.permissions, []))
 });
 
 const listUserTypes = async (req, res) => {
@@ -95,7 +118,7 @@ const updateUserType = async (req, res) => {
   if (!name) return badRequest(res, "A user type name is required.");
 
   if (existing.is_system && name !== existing.name) return badRequest(res, "System user types cannot be renamed.");
-  if (existing.permissions_locked && req.body.permissions !== undefined) {
+  if (existing.permissions_locked && !restrictionFor(existing.id) && req.body.permissions !== undefined) {
     return badRequest(res, `${existing.name} permissions are fixed and cannot be changed.`);
   }
   if (name !== existing.name && (await adminModel.userTypeNameExists(name, existing.id))) {
@@ -107,7 +130,10 @@ const updateUserType = async (req, res) => {
     slug: existing.is_system ? existing.slug : slugify(name),
     description: req.body.description === undefined ? existing.description : text(req.body.description).slice(0, 255) || null,
     tone: tone(req.body.tone, existing.tone),
-    permissions: req.body.permissions === undefined ? parseJson(existing.permissions, []) : permissionList(req.body.permissions)
+    permissions: withinRestriction(
+      existing.id,
+      req.body.permissions === undefined ? parseJson(existing.permissions, []) : permissionList(req.body.permissions)
+    )
   });
 
   res.json(mapUserType(await adminModel.findUserTypeById(existing.id)));

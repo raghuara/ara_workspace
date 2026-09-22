@@ -1,15 +1,5 @@
 import { useRef, useState } from 'react'
-import {
-  Alert,
-  Box,
-  Button,
-  Dialog,
-  IconButton,
-  LinearProgress,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material'
+import { Alert, Box, Button, Dialog, IconButton, LinearProgress, Stack, Tooltip, Typography } from '@mui/material'
 import { FileText, ImagePlus, Trash2, X } from 'lucide-react'
 import { attachmentService } from '@/api/attachmentService'
 import { isForbidden } from '@/api/httpClient'
@@ -36,7 +26,10 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(null)
 
-  const attachments = useAsync(attachmentService.list, ['task', taskId], { enabled: Boolean(taskId) })
+  const attachments = useAsync(attachmentService.list, ['task', taskId], {
+    enabled: Boolean(taskId),
+    keepPrevious: false,
+  })
   const items = attachments.data ?? []
   const images = items.filter(isImage)
   const files = items.filter((item) => !isImage(item))
@@ -139,7 +132,9 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
         <LinearProgress aria-label="Loading attachments" />
       ) : attachments.error ? (
         <Alert severity="warning">
-          {isForbidden(attachments.error) ? 'You cannot view files on this task.' : 'Files could not be loaded right now.'}
+          {isForbidden(attachments.error)
+            ? 'You cannot view files on this task.'
+            : 'Files could not be loaded right now.'}
         </Alert>
       ) : items.length === 0 ? (
         <Box
@@ -193,9 +188,23 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
                     type="button"
                     onClick={() => setPreview(image)}
                     aria-label={`Open ${image.name}`}
-                    sx={{ p: 0, border: 0, width: '100%', height: '100%', cursor: 'zoom-in', bgcolor: 'transparent', display: 'block' }}
+                    sx={{
+                      p: 0,
+                      border: 0,
+                      width: '100%',
+                      height: '100%',
+                      cursor: 'zoom-in',
+                      bgcolor: 'transparent',
+                      display: 'block',
+                    }}
                   >
-                    <Box component="img" src={image.url} alt={image.name} loading="lazy" sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+                    <Box
+                      component="img"
+                      src={image.url}
+                      alt={image.name}
+                      loading="lazy"
+                      sx={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
                   </Box>
                   {canEdit ? (
                     <Tooltip title="Remove">
@@ -228,10 +237,23 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
               key={file.id}
               direction="row"
               spacing={1}
-              sx={{ alignItems: 'center', px: 1.25, py: 0.75, borderRadius: 2, border: `1px solid ${colors.border}`, mb: 0.75 }}
+              sx={{
+                alignItems: 'center',
+                px: 1.25,
+                py: 0.75,
+                borderRadius: 2,
+                border: `1px solid ${colors.border}`,
+                mb: 0.75,
+              }}
             >
               <FileText size={15} strokeWidth={1.75} color={colors.textSecondary} aria-hidden="true" />
-              <Box component="a" href={file.url} target="_blank" rel="noreferrer" sx={{ flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}>
+              <Box
+                component="a"
+                href={file.url}
+                target="_blank"
+                rel="noreferrer"
+                sx={{ flex: 1, minWidth: 0, textDecoration: 'none', color: 'inherit' }}
+              >
                 <Typography variant="body2" fontWeight={500} noWrap>
                   {file.name}
                 </Typography>
@@ -251,7 +273,11 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
 
       {preview ? (
         <Dialog open onClose={() => setPreview(null)} maxWidth="lg">
-          <Stack direction="row" spacing={1} sx={{ alignItems: 'center', px: 2, py: 1, borderBottom: `1px solid ${colors.border}` }}>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{ alignItems: 'center', px: 2, py: 1, borderBottom: `1px solid ${colors.border}` }}
+          >
             <Typography variant="body2" fontWeight={600} noWrap sx={{ flex: 1, minWidth: 0 }}>
               {preview.name}
             </Typography>
@@ -261,7 +287,12 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
             </IconButton>
           </Stack>
           <Box sx={{ bgcolor: '#0f172a', display: 'grid', placeItems: 'center', p: 1 }}>
-            <Box component="img" src={preview.url} alt={preview.name} sx={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', display: 'block' }} />
+            <Box
+              component="img"
+              src={preview.url}
+              alt={preview.name}
+              sx={{ maxWidth: '90vw', maxHeight: '80vh', objectFit: 'contain', display: 'block' }}
+            />
           </Box>
         </Dialog>
       ) : null}

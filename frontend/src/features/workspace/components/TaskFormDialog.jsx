@@ -26,12 +26,14 @@ import { useFeatures } from '@/hooks/useFeatures'
 import { useSubmit } from '@/hooks/useSubmit'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { useAccess } from '@/hooks/useAccess'
+import { useSession } from '@/hooks/useSession'
 import { colors } from '@/theme/tokens'
 import { PERMISSIONS } from '@/constants/permissions'
 import { usePermissions } from '@/hooks/usePermissions'
 import { toIsoDate } from '@/utils/date'
 
 const TODAY = () => toIsoDate(new Date())
+const EMPLOYEE_TYPE_ID = 3
 
 const SCHEDULE_TABS = [
   { value: SCHEDULE_MODES.TODAY, label: 'Today', icon: Sun, hint: 'Starts today and lands in To Do straight away.' },
@@ -71,7 +73,9 @@ const validate = (values, mode, { canAssign }) => {
 export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, defaultTeamId, onClose, onSaved }) => {
   const isEditing = Boolean(task)
   const { columns, clients, assignableMembers, activeWorkspaceId } = useWorkspace()
-  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam } = useAccess()
+  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam, isAdmin } = useAccess()
+  const { userType } = useSession()
+  const canWriteDescription = userType?.id !== EMPLOYEE_TYPE_ID || isAdmin
   const groups = groupOptions(task?.groupId ?? null)
   const { isEnabled } = useFeatures()
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
@@ -105,6 +109,8 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
 
   const { can } = usePermissions()
   const canAssign = can(PERMISSIONS.TASK_ASSIGN)
+  const canSize = can(PERMISSIONS.TASK_WEIGHTAGE_SET)
+  const canChangeStatus = !isEditing || can(PERMISSIONS.TASK_MOVE)
   const fileInputRef = useRef(null)
   // Images chosen before the task exists. They upload right after creation,
   // against the new task id, so the form feels like one step.
@@ -133,10 +139,15 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
     setErrors({})
     setValues((current) => {
       if (nextMode === SCHEDULE_MODES.TODAY) {
-        return { ...current, dueDate: TODAY(), scheduledDate: '', statusId: todoColumn?.id ?? current.statusId }
+        return {
+          ...current,
+          dueDate: TODAY(),
+          scheduledDate: '',
+          statusId: canChangeStatus ? (todoColumn?.id ?? current.statusId) : current.statusId,
+        }
       }
       if (nextMode === SCHEDULE_MODES.SCHEDULED) {
-        return { ...current, statusId: scheduledColumn?.id ?? current.statusId }
+        return { ...current, statusId: canChangeStatus ? (scheduledColumn?.id ?? current.statusId) : current.statusId }
       }
       return { ...current, scheduledDate: '' }
     })
@@ -148,11 +159,13 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
     setErrors(validationErrors)
     if (Object.keys(validationErrors).length > 0) return
 
-    const { assigneeIds, ...rest } = values
+    const { assigneeIds, sizeKey, statusId, description, ...rest } = values
     const payload = {
       ...rest,
+      ...(canWriteDescription ? { description } : {}),
       ...(canAssign ? { assigneeIds } : {}),
-      points: size.points,
+      ...(canSize ? { sizeKey, points: size.points } : {}),
+      ...(canChangeStatus ? { statusId } : {}),
       dueDate: mode === SCHEDULE_MODES.SCHEDULED ? values.scheduledDate : values.dueDate,
       scheduledDate: mode === SCHEDULE_MODES.SCHEDULED ? values.scheduledDate : null,
     }
@@ -274,7 +287,14 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
               ))}
             </TextField>
 
-            <TextField {...fieldProps('statusId', 'Board column', { select: true, required: true })}>
+            <TextField
+              {...fieldProps('statusId', 'Board column', {
+                select: true,
+                required: true,
+                disabled: !canChangeStatus,
+                ...(canChangeStatus ? {} : { helperText: 'Moving tasks is not allowed for your role' }),
+              })}
+            >
               {columns.map((column) => (
                 <MenuItem key={column.id} value={column.id}>
                   {column.name}
@@ -337,7 +357,7 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
             </Alert>
           )}
 
-          {weightageOn ? (
+          {weightageOn && canSize ? (
             <SizePicker
               value={values.sizeKey}
               onChange={(sizeKey) => setValues((current) => ({ ...current, sizeKey }))}
@@ -451,6 +471,10 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
             fullWidth
             multiline
             minRows={3}
+            disabled={!canWriteDescription}
+            helperText={
+              canWriteDescription ? undefined : 'Employees can read the description. Reply in the task comments instead.'
+            }
             placeholder="Brief, deliverables, sizes to export…"
           />
         </DialogContent>

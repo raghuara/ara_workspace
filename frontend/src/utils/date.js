@@ -66,3 +66,23 @@ export const formatTenure = (value) => {
   if (remainingMonths === 0) return `${years} yr`
   return `${years} yr ${remainingMonths} mo`
 }
+
+export const formatTimeAgo = (value) => {
+  const date = value ? new Date(value) : null
+  if (!date || Number.isNaN(date.getTime())) return '—'
+  const seconds = Math.round((Date.now() - date.getTime()) / 1000)
+  if (seconds < 45) return 'just now'
+  const minutes = Math.round(seconds / 60)
+  if (minutes < 60) return `${minutes}m ago`
+  const hours = Math.round(minutes / 60)
+  if (hours < 24) return `${hours}h ago`
+  const days = Math.round(hours / 24)
+  if (days < 7) return `${days}d ago`
+  return `${date.getDate()} ${MONTHS[date.getMonth()]} ${date.getFullYear()}`
+}
+
+export const formatDateTime = (value) => {
+  const date = value ? new Date(value) : null
+  if (!date || Number.isNaN(date.getTime())) return '—'
+  return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
+}

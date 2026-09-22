@@ -18,6 +18,10 @@ Run the files in `migrations/` **in numeric order** on an empty `ara_workspace` 
 13_schema_performance.sql      performance reviews and goals
 14_schema_entities_access.sql  workspace = company: employees/catalogs per workspace, workspace_access grants
 15_schema_account_manage.sql   account.manage permission; Admin can onboard staff and create logins
+16_schema_fiscal_year_employee_scope.sql  per-workspace financial year start month; Employee locked to own tasks
+17_schema_period_indexes.sql   indexes for filtering completed tasks and activity by year/month
+18_schema_employee_task_permissions.sql  Employee holds task permissions only, editable on User Types
+19_schema_task_comments.sql    task comments; who last edited a task description
 ```
 
 Then create the first login:

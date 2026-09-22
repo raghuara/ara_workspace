@@ -15,6 +15,7 @@ import {
 import { ChevronDown, Columns3, Info, LayoutList, Plus, Repeat, Settings2, Table2 } from 'lucide-react'
 import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
+import { MonthPicker } from '@/components/MonthPicker'
 import { QueryStateView } from '@/components/QueryStateView'
 import { EmptyState } from '@/components/EmptyState'
 import { ToneChip } from '@/components/ToneChip'
@@ -27,12 +28,14 @@ import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { useFeatures } from '@/hooks/useFeatures'
 import { usePermissions } from '@/hooks/usePermissions'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { useAccess } from '@/hooks/useAccess'
 import { colors, layout } from '@/theme/tokens'
 import { TaskFilterBar } from './components/TaskFilterBar'
 import { TaskFormDialog } from './components/TaskFormDialog'
 import { AddGroupDialog } from './components/AddGroupDialog'
+import { RemoveGroupDialog } from './components/RemoveGroupDialog'
 import { TaskDetailDrawer } from './components/TaskDetailDrawer'
 import { ScopeDetailsDrawer } from './components/ScopeDetailsDrawer'
 import { ScopeStats } from './components/ScopeStats'
@@ -74,6 +77,7 @@ export const WorkspacePage = () => {
   const [filters, setFilters] = useState(EMPTY_FILTERS)
   const [taskDialog, setTaskDialog] = useState({ open: false, task: null, statusId: null })
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
+  const [removingGroup, setRemovingGroup] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
   const [addMenu, setAddMenu] = useState(null)
@@ -83,11 +87,19 @@ export const WorkspacePage = () => {
   const view = availableTabs.some((tab) => tab.value === params.view) ? params.view : null
 
   const debouncedSearch = useDebouncedValue(filters.search, 300)
+  const { range } = usePeriod()
 
   // The route owns group/team scope, so it always wins over the filter bar.
   const query = useMemo(
-    () => ({ ...filters, search: debouncedSearch, groupId: scope.groupId, teamId: scope.teamId }),
-    [filters, debouncedSearch, scope],
+    () => ({
+      ...filters,
+      search: debouncedSearch,
+      groupId: scope.groupId,
+      teamId: scope.teamId,
+      from: range.from,
+      to: range.to,
+    }),
+    [filters, debouncedSearch, scope, range.from, range.to],
   )
 
   const {
@@ -103,7 +115,8 @@ export const WorkspacePage = () => {
   const group = groups.find((item) => item.id === scope.groupId) ?? null
   const team = teams.find((item) => item.id === scope.teamId) ?? null
 
-  const summary = useAsync(dashboardService.getScopeSummary, [activeWorkspaceId, scope], {
+  const canSeeWorkspace = can(PERMISSIONS.WORKSPACE_VIEW)
+  const summary = useAsync(dashboardService.getScopeSummary, [activeWorkspaceId, { ...scope, ...range }], {
     enabled: Boolean(activeWorkspaceId) && Boolean(view),
   })
 
@@ -179,13 +192,16 @@ export const WorkspacePage = () => {
         breadcrumbs={breadcrumbs}
         actions={
           <>
-            <Button
-              variant="outlined"
-              startIcon={<Info size={15} strokeWidth={2} />}
-              onClick={() => setDetailsOpen(true)}
-            >
-              {detailsLabel}
-            </Button>
+            {canSeeWorkspace ? (
+              <Button
+                variant="outlined"
+                startIcon={<Info size={15} strokeWidth={2} />}
+                onClick={() => setDetailsOpen(true)}
+              >
+                {detailsLabel}
+              </Button>
+            ) : null}
+            <MonthPicker hint="Completed tasks show in the month they were finished. Open tasks show in the month they are due — the current month also keeps anything still open from earlier." />
             {can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere ? (
               <ButtonGroup variant="contained" disableElevation aria-label="Add task">
                 <Button
@@ -194,7 +210,7 @@ export const WorkspacePage = () => {
                 >
                   Add task
                 </Button>
-                {isEnabled(FEATURES.RECURRING_TASKS) ? (
+                {isEnabled(FEATURES.RECURRING_TASKS) && can(PERMISSIONS.TASK_RECURRING) ? (
                   <Button
                     size="small"
                     aria-label="More ways to add"
@@ -234,6 +250,7 @@ export const WorkspacePage = () => {
         summary={summary.data}
         loading={summary.loading && !summary.data}
         showPoints={isEnabled(FEATURES.WEIGHTAGE)}
+        personal={!canSeeWorkspace}
       />
 
       <Stack
@@ -286,6 +303,7 @@ export const WorkspacePage = () => {
             scope={scope}
             onOpenTask={setSelectedTask}
             onAddGroup={() => setGroupDialogOpen(true)}
+            onRemoveGroup={setRemovingGroup}
             onChanged={refreshAll}
             onBoardChange={setBoard}
           />
@@ -296,6 +314,7 @@ export const WorkspacePage = () => {
             loading={loading}
             onOpenTask={setSelectedTask}
             onAddTask={(statusId) => setTaskDialog({ open: true, task: null, statusId })}
+            onRemoveGroup={setRemovingGroup}
             onChanged={refreshAll}
           />
         ) : null}
@@ -321,6 +340,18 @@ export const WorkspacePage = () => {
           open
           onClose={() => setGroupDialogOpen(false)}
           onSaved={() => {
+            refreshStructure()
+            reload()
+          }}
+        />
+      ) : null}
+
+      {removingGroup ? (
+        <RemoveGroupDialog
+          column={removingGroup}
+          onClose={() => setRemovingGroup(null)}
+          onRemoved={(column) => {
+            if (board) setBoard({ ...board, columns: board.columns.filter((item) => item.id !== column.id) })
             refreshStructure()
             reload()
           }}
@@ -372,7 +403,7 @@ export const WorkspacePage = () => {
         />
       ) : null}
 
-      {detailsOpen ? (
+      {detailsOpen && canSeeWorkspace ? (
         <ScopeDetailsDrawer
           key={`${scope.groupId}/${scope.teamId}`}
           workspaceId={activeWorkspaceId}

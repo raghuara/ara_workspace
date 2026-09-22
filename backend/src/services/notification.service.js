@@ -74,8 +74,24 @@ const taskDeleted = async ({ task, assigneeIds, actorId }, connection) => {
   );
 };
 
+const taskCommented = async ({ task, assigneeIds, actorId, excerpt }, connection) => {
+  const name = await actorName(actorId, connection);
+  await notify(
+    {
+      recipients: [...assigneeIds, task.createdById],
+      actorId,
+      kind: "commented",
+      title: "New comment",
+      body: `${name} on "${task.title}": ${excerpt}`.slice(0, 255),
+      task
+    },
+    connection
+  );
+};
+
 module.exports = {
   taskAssigned,
   taskMoved,
-  taskDeleted
+  taskDeleted,
+  taskCommented
 };

@@ -34,8 +34,8 @@ const timeAgo = (iso) => {
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
-export const RecentActivityTable = ({ workspaceId, limit = 6, canView = true }) => {
-  const activity = useAsync(activityService.listActivity, [{ workspaceId, page: 1, pageSize: limit }], {
+export const RecentActivityTable = ({ workspaceId, range, limit = 6, canView = true }) => {
+  const activity = useAsync(activityService.listActivity, [{ workspaceId, ...range, page: 1, pageSize: limit }], {
     enabled: canView && Boolean(workspaceId),
   })
 

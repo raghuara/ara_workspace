@@ -60,6 +60,13 @@ const API_BASE_URL = (
   (import.meta.env.PROD ? '/api' : `${window.location.protocol}//${window.location.hostname}:5000/api`)
 ).replace(/\/$/, '')
 
+const writeListeners = new Set()
+
+export const onSuccessfulWrite = (listener) => {
+  writeListeners.add(listener)
+  return () => writeListeners.delete(listener)
+}
+
 export const toQueryString = (params = {}) => {
   const query = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -114,6 +121,8 @@ export const apiRequest = async (path, options = {}) => {
       payload?.errors ?? null,
     )
   }
+
+  if (method !== 'GET') writeListeners.forEach((listener) => listener())
 
   // 204 No Content (e.g. a successful DELETE) has no body.
   return payload

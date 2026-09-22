@@ -15,7 +15,16 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { AlignLeft, Flag, Maximize2, Paperclip, Pencil, TextCursorInput, TriangleAlert } from 'lucide-react'
+import {
+  AlignLeft,
+  Flag,
+  Maximize2,
+  MessageSquare,
+  Paperclip,
+  Pencil,
+  TextCursorInput,
+  TriangleAlert,
+} from 'lucide-react'
 import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -292,6 +301,17 @@ export const TableView = ({ board, loading, onOpenTask, onChanged }) => {
                         >
                           <Paperclip size={11} strokeWidth={1.75} aria-hidden="true" />
                           <Typography variant="caption">{task.attachmentCount}</Typography>
+                        </Stack>
+                      ) : null}
+                      {task.commentCount > 0 ? (
+                        <Stack
+                          direction="row"
+                          spacing={0.25}
+                          sx={{ alignItems: 'center', color: colors.textSecondary, flexShrink: 0 }}
+                          aria-label={`${task.commentCount} comments`}
+                        >
+                          <MessageSquare size={11} strokeWidth={1.75} aria-hidden="true" />
+                          <Typography variant="caption">{task.commentCount}</Typography>
                         </Stack>
                       ) : null}
 

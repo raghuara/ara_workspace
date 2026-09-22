@@ -16,6 +16,7 @@ export const employeeService = {
       department: employee.department,
       designation: employee.designation,
       workspaceName: employee.workspaceName,
+      loginUserTypeId: employee.loginUserTypeId ?? null,
     }))
   },
 

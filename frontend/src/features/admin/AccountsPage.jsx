@@ -34,6 +34,7 @@ import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 import { formatDate } from '@/utils/date'
 import { CreateLoginDialog, TemporaryPasswordDialog } from './LoginDialogs'
+import { AdminRoleDialog } from './AdminRoleDialog'
 
 const formatLastLogin = (iso) => (iso ? formatDate(iso.slice(0, 10)) : 'Never')
 
@@ -68,6 +69,50 @@ export const AccountsPage = () => {
       active: rows.filter((row) => row.hasAccount && row.isActive).length,
     }
   }, [accounts.data])
+
+  const [typeChange, setTypeChange] = useState(null)
+  const [confirmingType, setConfirmingType] = useState(false)
+
+  const changeUserType = async (row, userTypeId) => {
+    setRowError('')
+    setBusyId(row.employeeId)
+    try {
+      await accountService.updateAccount(row.employeeId, { userTypeId })
+      accounts.reload()
+    } catch (caught) {
+      if (caught.code === 'WORKSPACE_ADMIN_CONFLICT' || caught.code === 'WORKSPACE_ADMIN_REQUIRED') {
+        setTypeChange({
+          row,
+          userTypeId,
+          typeName: typeOptions.find((type) => type.id === userTypeId)?.name ?? 'Employee',
+          code: caught.code,
+          message: caught.message,
+          workspaces: caught.details?.workspaces ?? [],
+        })
+      } else {
+        setRowError(caught.message ?? 'That change could not be saved.')
+      }
+    } finally {
+      setBusyId(null)
+    }
+  }
+
+  const confirmTypeChange = async () => {
+    setConfirmingType(true)
+    try {
+      await accountService.updateAccount(typeChange.row.employeeId, {
+        userTypeId: typeChange.userTypeId,
+        removeFromWorkspaceAdmins: true,
+      })
+      setTypeChange(null)
+      accounts.reload()
+    } catch (caught) {
+      setTypeChange(null)
+      setRowError(caught.message ?? 'That change could not be saved.')
+    } finally {
+      setConfirmingType(false)
+    }
+  }
 
   const runRowAction = async (employeeId, action) => {
     setRowError('')
@@ -164,13 +209,7 @@ export const AccountsPage = () => {
                               size="small"
                               value={row.userTypeId}
                               disabled={locked}
-                              onChange={(event) =>
-                                runRowAction(row.employeeId, () =>
-                                  accountService.updateAccount(row.employeeId, {
-                                    userTypeId: Number(event.target.value),
-                                  }),
-                                )
-                              }
+                              onChange={(event) => changeUserType(row, Number(event.target.value))}
                               sx={{ minWidth: 160 }}
                               slotProps={{ select: { 'aria-label': `User type for ${row.fullName}` } }}
                             >
@@ -303,6 +342,15 @@ export const AccountsPage = () => {
       ) : null}
 
       {revealed ? <TemporaryPasswordDialog result={revealed} onClose={() => setRevealed(null)} /> : null}
+
+      {typeChange ? (
+        <AdminRoleDialog
+          change={typeChange}
+          confirming={confirmingType}
+          onConfirm={confirmTypeChange}
+          onClose={() => setTypeChange(null)}
+        />
+      ) : null}
 
       <Typography variant="caption" sx={{ display: 'block', mt: 1.5, color: colors.textSecondary }}>
         Logins use the employee's work email. Deactivating keeps the record but blocks sign-in. Switch workspace in the

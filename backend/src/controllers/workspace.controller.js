@@ -1,23 +1,36 @@
 const workspaceModel = require("../models/workspace.model");
 const accessModel = require("../models/access.model");
+const accountModel = require("../models/account.model");
 const access = require("../services/access.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
-const { DEFAULT_STATUS_TEMPLATES, STATUS_KINDS, TONES, USER_TYPE } = require("../constants/workspace");
+const { DEFAULT_STATUS_TEMPLATES, LIMITS, STATUS_KINDS, TONES, USER_TYPE } = require("../constants/workspace");
 
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 const idList = (value) => (Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : []);
 const tone = (value, fallback) => (TONES.includes(value) ? value : fallback);
+const REQUIRED_KINDS = { todo: "To Do", completed: "Completed" };
 
 const isMasterAdmin = (req) => req.user.userTypeId === USER_TYPE.MASTER_ADMIN;
 
 const badRequest = (res, message, errors) =>
   res.status(400).json({ message, code: errors ? "VALIDATION_ERROR" : "BAD_REQUEST", ...(errors && { errors }) });
+const limitReached = (res, message) => res.status(409).json({ message, code: "LIMIT_REACHED" });
 
 const notFound = (res, message) => res.status(404).json({ message, code: "NOT_FOUND" });
 
 const forbidden = (res) =>
   res.status(403).json({ message: "You do not have access to this workspace.", code: "FORBIDDEN" });
+
+const employeeAdminError = async (res, adminIds) => {
+  const employees = await accountModel.findLoginsOfType(adminIds, USER_TYPE.EMPLOYEE);
+  if (employees.length === 0) return false;
+  const list = employees.map((row) => row.full_name).join(", ");
+  badRequest(res, `${list} ${employees.length === 1 ? "has" : "have"} the Employee user type, and Employees cannot be workspace admins. Change their user type in Access › Accounts first.`, {
+    adminIds: "Employees cannot be workspace admins."
+  });
+  return true;
+};
 
 const mapWorkspace = (row, adminIds = []) => ({
   id: row.id,
@@ -25,6 +38,7 @@ const mapWorkspace = (row, adminIds = []) => ({
   shortName: row.short_name,
   description: row.description ?? "",
   tone: row.tone,
+  fiscalYearStartMonth: row.fiscal_year_start_month ?? 4,
   ownerId: row.owner_id,
   adminIds,
   createdAt: row.created_at,
@@ -110,8 +124,17 @@ const getWorkspace = async (req, res) => {
 };
 
 const createWorkspace = async (req, res) => {
+  if ((await workspaceModel.countWorkspaces()) >= LIMITS.WORKSPACES) {
+    return limitReached(res, `You can have up to ${LIMITS.WORKSPACES} workspaces. Delete one you no longer use before creating another.`);
+  }
+
   const name = text(req.body.name);
   if (!name) return badRequest(res, "A workspace name is required.", { name: "Workspace name is required." });
+
+  const fiscalYearStartMonth = req.body.fiscalYearStartMonth === undefined ? 4 : Number(req.body.fiscalYearStartMonth);
+  if (!Number.isInteger(fiscalYearStartMonth) || fiscalYearStartMonth < 1 || fiscalYearStartMonth > 12) {
+    return badRequest(res, "Choose a month between January and December.", { fiscalYearStartMonth: "Choose a start month." });
+  }
 
   const adminIds = idList(req.body.adminIds);
   if (adminIds.length === 0) {
@@ -120,6 +143,7 @@ const createWorkspace = async (req, res) => {
   if (!(await workspaceModel.employeesExist(adminIds))) {
     return badRequest(res, "One of the selected admins does not exist.", { adminIds: "Unknown employee." });
   }
+  if (await employeeAdminError(res, adminIds)) return;
 
   const workspaceId = await withTransaction(async (connection) => {
     const id = await nextId("WS", connection);
@@ -131,6 +155,7 @@ const createWorkspace = async (req, res) => {
         shortName: text(req.body.shortName).slice(0, 10) || name.slice(0, 3).toUpperCase(),
         description: text(req.body.description) || null,
         tone: tone(req.body.tone, "blue"),
+        fiscalYearStartMonth,
         ownerId: req.user.employeeId
       },
       connection
@@ -177,12 +202,22 @@ const updateWorkspace = async (req, res) => {
   const name = req.body.name === undefined ? workspace.name : text(req.body.name);
   if (!name) return badRequest(res, "A workspace name is required.", { name: "Workspace name is required." });
 
+  const fiscalYearStartMonth =
+    req.body.fiscalYearStartMonth === undefined ? workspace.fiscal_year_start_month : Number(req.body.fiscalYearStartMonth);
+  if (!Number.isInteger(fiscalYearStartMonth) || fiscalYearStartMonth < 1 || fiscalYearStartMonth > 12) {
+    return badRequest(res, "Choose a month between January and December.", { fiscalYearStartMonth: "Choose a start month." });
+  }
+
   const adminIds = req.body.adminIds === undefined ? null : idList(req.body.adminIds);
   if (adminIds && adminIds.length === 0) {
     return badRequest(res, "Every workspace needs at least one admin.", { adminIds: "Choose at least one workspace admin." });
   }
   if (adminIds && !(await workspaceModel.employeesExist(adminIds))) {
     return badRequest(res, "One of the selected admins does not exist.", { adminIds: "Unknown employee." });
+  }
+  if (adminIds) {
+    const current = await workspaceModel.findAdminIds(workspace.id);
+    if (await employeeAdminError(res, adminIds.filter((employeeId) => !current.includes(employeeId)))) return;
   }
 
   await withTransaction(async (connection) => {
@@ -193,7 +228,8 @@ const updateWorkspace = async (req, res) => {
         shortName:
           req.body.shortName === undefined ? workspace.short_name : text(req.body.shortName).slice(0, 10) || workspace.short_name,
         description: req.body.description === undefined ? workspace.description : text(req.body.description) || null,
-        tone: tone(req.body.tone, workspace.tone)
+        tone: tone(req.body.tone, workspace.tone),
+        fiscalYearStartMonth
       },
       connection
     );
@@ -273,6 +309,9 @@ const getStructure = async (req, res) => {
 const createGroup = async (req, res) => {
   const workspace = await loadAccessibleWorkspace(req, res, req.params.workspaceId);
   if (!workspace) return;
+  if ((await workspaceModel.countGroups(workspace.id)) >= LIMITS.GROUPS_PER_WORKSPACE) {
+    return limitReached(res, `A workspace can have up to ${LIMITS.GROUPS_PER_WORKSPACE} groups. Remove or merge one before adding another.`);
+  }
 
   const name = text(req.body.name);
   if (!name) return badRequest(res, "A group name is required.", { name: "Group name is required." });
@@ -490,8 +529,20 @@ const deleteColumn = async (req, res) => {
   if (!column) return notFound(res, "That column does not exist.");
   if (!(await loadAccessibleWorkspace(req, res, column.workspace_id))) return;
 
-  if ((await workspaceModel.countTasksInColumn(column.id)) > 0) {
-    return badRequest(res, "This column still holds tasks. Move them elsewhere before deleting it.");
+  const required = REQUIRED_KINDS[column.kind];
+  if (required) {
+    const columns = await workspaceModel.findColumns(column.workspace_id);
+    if (!columns.some((other) => other.id !== column.id && other.kind === column.kind)) {
+      return badRequest(res, `The board needs a ${required} group, so "${column.name}" cannot be removed.`);
+    }
+  }
+
+  const taskCount = await workspaceModel.countTasksInColumn(column.id);
+  if (taskCount > 0) {
+    return badRequest(
+      res,
+      `"${column.name}" still holds ${taskCount} task${taskCount === 1 ? "" : "s"}, including any hidden by filters or the selected month. Move them to another group first.`
+    );
   }
 
   await workspaceModel.deleteColumn(column.id);

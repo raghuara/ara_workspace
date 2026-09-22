@@ -7,6 +7,7 @@ const WORKSPACE_SELECT = `
     w.short_name,
     w.description,
     w.tone,
+    w.fiscal_year_start_month,
     w.owner_id,
     DATE_FORMAT(w.created_at, '%Y-%m-%d') AS created_at,
     (SELECT COUNT(*) FROM workspace_groups g WHERE g.workspace_id = w.id) AS group_count,
@@ -21,6 +22,16 @@ const WORKSPACE_SELECT = `
 const findAllWorkspaces = async () => {
   const [rows] = await pool.query(`${WORKSPACE_SELECT} ORDER BY w.created_at, w.id`);
   return rows;
+};
+
+const countWorkspaces = async (connection = pool) => {
+  const [[{ total }]] = await connection.query("SELECT COUNT(*) AS total FROM workspaces");
+  return Number(total);
+};
+
+const countGroups = async (workspaceId, connection = pool) => {
+  const [[{ total }]] = await connection.query("SELECT COUNT(*) AS total FROM workspace_groups WHERE workspace_id = ?", [workspaceId]);
+  return Number(total);
 };
 
 const findWorkspacesForEmployee = async (employeeId) => {
@@ -76,16 +87,24 @@ const findAdminIdsByWorkspace = async (workspaceIds) => {
 
 const insertWorkspace = async (workspace, connection) => {
   await connection.query(
-    `INSERT INTO workspaces (id, name, short_name, description, tone, owner_id)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [workspace.id, workspace.name, workspace.shortName, workspace.description, workspace.tone, workspace.ownerId]
+    `INSERT INTO workspaces (id, name, short_name, description, tone, fiscal_year_start_month, owner_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      workspace.id,
+      workspace.name,
+      workspace.shortName,
+      workspace.description,
+      workspace.tone,
+      workspace.fiscalYearStartMonth,
+      workspace.ownerId
+    ]
   );
 };
 
 const updateWorkspace = async (workspaceId, workspace, connection = pool) => {
   await connection.query(
-    `UPDATE workspaces SET name = ?, short_name = ?, description = ?, tone = ? WHERE id = ?`,
-    [workspace.name, workspace.shortName, workspace.description, workspace.tone, workspaceId]
+    `UPDATE workspaces SET name = ?, short_name = ?, description = ?, tone = ?, fiscal_year_start_month = ? WHERE id = ?`,
+    [workspace.name, workspace.shortName, workspace.description, workspace.tone, workspace.fiscalYearStartMonth, workspaceId]
   );
 };
 
@@ -342,8 +361,36 @@ const employeesExist = async (employeeIds, connection = pool) => {
   return found === employeeIds.length;
 };
 
+const findAdminWorkspacesFor = async (employeeId, connection = pool) => {
+  const [rows] = await connection.query(
+    `SELECT
+       w.id,
+       w.name,
+       w.owner_id = ? AS is_owner,
+       (SELECT COUNT(*) FROM workspace_admins x WHERE x.workspace_id = w.id) AS admin_count
+     FROM workspaces w
+     WHERE w.owner_id = ?
+        OR EXISTS (SELECT 1 FROM workspace_admins a WHERE a.workspace_id = w.id AND a.employee_id = ?)
+     ORDER BY w.name`,
+    [employeeId, employeeId, employeeId]
+  );
+  return rows.map((row) => ({ id: row.id, name: row.name, isOwner: Boolean(row.is_owner), adminCount: Number(row.admin_count) }));
+};
+
+const removeAdminFromWorkspaces = async (employeeId, workspaceIds, userTypeId, connection = pool) => {
+  if (workspaceIds.length === 0) return;
+  await connection.query("DELETE FROM workspace_admins WHERE employee_id = ? AND workspace_id IN (?)", [employeeId, workspaceIds]);
+  await connection.query("UPDATE workspace_members SET user_type_id = ? WHERE employee_id = ? AND workspace_id IN (?)", [
+    userTypeId,
+    employeeId,
+    workspaceIds
+  ]);
+};
+
 module.exports = {
   findAllWorkspaces,
+  countWorkspaces,
+  countGroups,
   findWorkspacesForEmployee,
   findWorkspaceIdsForEmployee,
   findWorkspaceById,
@@ -377,5 +424,7 @@ module.exports = {
   updateColumn,
   deleteColumn,
   countTasksInColumn,
-  employeesExist
+  employeesExist,
+  findAdminWorkspacesFor,
+  removeAdminFromWorkspaces
 };

@@ -67,8 +67,8 @@ const insertAccount = async ({ employeeId, email, passwordHash, userTypeId }, co
   );
 };
 
-const updateAccount = async (userId, { userTypeId, isActive }) => {
-  await pool.query("UPDATE users SET user_type_id = ?, is_active = ? WHERE id = ?", [userTypeId, isActive, userId]);
+const updateAccount = async (userId, { userTypeId, isActive }, connection = pool) => {
+  await connection.query("UPDATE users SET user_type_id = ?, is_active = ? WHERE id = ?", [userTypeId, isActive, userId]);
 };
 
 const setPassword = async (userId, passwordHash, mustChange) => {
@@ -87,12 +87,25 @@ const countActiveUsersOfType = async (userTypeId, excludeUserId = null) => {
   return total;
 };
 
+const findLoginsOfType = async (employeeIds, userTypeId) => {
+  if (employeeIds.length === 0) return [];
+  const [rows] = await pool.query(
+    `SELECT u.employee_id, CONCAT(e.first_name, ' ', e.last_name) AS full_name
+     FROM users u
+     JOIN employees e ON e.employee_id = u.employee_id
+     WHERE u.employee_id IN (?) AND u.user_type_id = ?`,
+    [employeeIds, userTypeId]
+  );
+  return rows;
+};
+
 const findUserTypes = async () => {
   const [rows] = await pool.query("SELECT id, name, slug, tone, permissions FROM user_types ORDER BY id");
   return rows;
 };
 
 module.exports = {
+  findLoginsOfType,
   findAccounts,
   findAccountByEmployeeId,
   insertAccount,

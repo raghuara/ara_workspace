@@ -21,6 +21,7 @@ import { useAsync } from '@/hooks/useAsync'
 import { useFeatures } from '@/hooks/useFeatures'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSession } from '@/hooks/useSession'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors } from '@/theme/tokens'
 import { formatLongDate, formatRelativeDay, toIsoDate } from '@/utils/date'
@@ -28,7 +29,6 @@ import { RecentActivityTable } from './RecentActivityTable'
 import { TeamsTable } from './TeamsTable'
 import { WorkspaceSummaryCard } from './WorkspaceSummaryCard'
 
-const EMPTY = {}
 const GAP = 1.5
 
 export const WorkspaceDashboard = () => {
@@ -39,10 +39,11 @@ export const WorkspaceDashboard = () => {
 
   const canViewTasks = can(PERMISSIONS.TASK_VIEW) && isEnabled(FEATURES.WORKSPACES)
 
-  const board = useAsync(taskService.getBoard, [activeWorkspaceId, EMPTY], {
+  const { yearRange, yearLabel } = usePeriod()
+  const board = useAsync(taskService.getBoard, [activeWorkspaceId, yearRange], {
     enabled: canViewTasks && Boolean(activeWorkspaceId),
   })
-  const overview = useAsync(dashboardService.getOverview, [], { enabled: canViewTasks })
+  const overview = useAsync(dashboardService.getOverview, [yearRange], { enabled: canViewTasks })
   const mine = overview.data?.workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null
 
   const stats = useMemo(() => {
@@ -78,7 +79,7 @@ export const WorkspaceDashboard = () => {
     <Box>
       <PageHeader
         title={`Good day, ${user?.name?.split(' ')[0] ?? 'there'}`}
-        description={`${formatLongDate(toIsoDate(new Date()))} · ${activeWorkspace ? `Here is where ${activeWorkspace.name} stands today.` : 'Here is where things stand today.'}`}
+        description={`${formatLongDate(toIsoDate(new Date()))} · FY ${yearLabel} · ${activeWorkspace ? `Here is where ${activeWorkspace.name} stands today.` : 'Here is where things stand today.'}`}
         actions={
           <Button component={Link} to={workspaceViewPath('board')} variant="contained" size="small" endIcon={<ArrowRight size={14} strokeWidth={2} />}>
             Open board
@@ -211,7 +212,7 @@ export const WorkspaceDashboard = () => {
                 )}
               </SectionCard>
 
-              <RecentActivityTable workspaceId={activeWorkspaceId} canView={can(PERMISSIONS.ACTIVITY_VIEW) && isEnabled(FEATURES.ACTIVITY_LOG)} />
+              <RecentActivityTable workspaceId={activeWorkspaceId} range={yearRange} canView={can(PERMISSIONS.ACTIVITY_VIEW) && isEnabled(FEATURES.ACTIVITY_LOG)} />
             </Box>
           </Stack>
         )}

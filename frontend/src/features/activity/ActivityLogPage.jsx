@@ -11,6 +11,7 @@ import {
 } from '@mui/material'
 import { History, Zap } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
+import { MonthPicker } from '@/components/MonthPicker'
 import { SearchField } from '@/components/SearchField'
 import { EmptyState } from '@/components/EmptyState'
 import { QueryStateView } from '@/components/QueryStateView'
@@ -20,6 +21,7 @@ import { activityService } from '@/api/activityService'
 import { HISTORY_ACTIONS } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 import { pluralize } from '@/utils/format'
@@ -34,8 +36,16 @@ const ACTION_TONES = {
   [HISTORY_ACTIONS.COMMENTED]: 'slate',
 }
 
+const clip = (value) => {
+  const flat = value.replace(/\s+/g, ' ')
+  return flat.length > 120 ? `${flat.slice(0, 119)}…` : flat
+}
+
 const detailText = (entry) => {
   if (!entry.detail) return null
+  if (entry.detail.after) return `“${clip(entry.detail.after)}”`
+  if (entry.detail.before) return `Removed: “${clip(entry.detail.before)}”`
+  if (entry.detail.excerpt) return `“${entry.detail.excerpt}”`
   if (entry.detail.from && entry.detail.to) return `${entry.detail.from} → ${entry.detail.to}`
   if (entry.detail.fields) return `Changed: ${entry.detail.fields.join(', ')}`
   return null
@@ -43,11 +53,15 @@ const detailText = (entry) => {
 
 export const ActivityLogPage = () => {
   const { activeWorkspaceId, activeWorkspace } = useWorkspace()
+  const { range, periodLabel } = usePeriod()
+  const periodKey = `${range.from}|${range.to}`
 
   const [search, setSearch] = useState('')
   const [action, setAction] = useState('')
   const [actorId, setActorId] = useState('')
-  const [page, setPage] = useState(0)
+  const [paging, setPaging] = useState({ key: periodKey, page: 0 })
+  const page = paging.key === periodKey ? paging.page : 0
+  const setPage = (next) => setPaging({ key: periodKey, page: next })
   const [pageSize, setPageSize] = useState(25)
 
   const debouncedSearch = useDebouncedValue(search, 300)
@@ -62,10 +76,12 @@ export const ActivityLogPage = () => {
       search: debouncedSearch,
       action,
       actorId,
+      from: range.from,
+      to: range.to,
       page: page + 1,
       pageSize,
     }),
-    [activeWorkspaceId, debouncedSearch, action, actorId, page, pageSize],
+    [activeWorkspaceId, debouncedSearch, action, actorId, range.from, range.to, page, pageSize],
   )
 
   const { data, loading, error, reload } = useAsync(activityService.listActivity, [query], {
@@ -81,12 +97,13 @@ export const ActivityLogPage = () => {
     <Box sx={{ maxWidth: layout.contentMaxWidth, mx: 'auto', px: { xs: 2, md: 3, lg: 4 }, py: { xs: 3, md: 4 } }}>
       <PageHeader
         title="Activity Log"
-        description={`Every change made across ${activeWorkspace?.name ?? 'this workspace'} — who did it, what changed and when.`}
+        description={`Every change made across ${activeWorkspace?.name ?? 'this workspace'} in ${periodLabel} — who did it, what changed and when.`}
         breadcrumbs={[{ label: 'Activity Log' }]}
       />
 
       <Card>
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ p: 2 }}>
+          <MonthPicker />
           <SearchField
             value={search}
             onChange={(value) => {

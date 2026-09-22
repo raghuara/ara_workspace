@@ -1,55 +1,44 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 
-/**
- * Runs a service call and tracks loading/error/data.
- *
- * `fetcher` must be a stable reference (a service method, not an inline arrow)
- * and `args` are serialised for the dependency comparison, which lets callers
- * pass query objects inline without re-running on every render.
- *
- * Loading is derived by comparing the requested key against the settled key so
- * that no state is written synchronously inside the effect.
- */
-export const useAsync = (fetcher, args = [], { enabled = true, initialData } = {}) => {
-  const argsKey = JSON.stringify(args)
-  const [reloadToken, setReloadToken] = useState(0)
-  const [state, setState] = useState(() =>
-    initialData === undefined
-      ? { key: null, data: null, error: null }
-      : { key: `${argsKey}#0`, data: initialData, error: null },
+const fetcherIds = new WeakMap()
+let nextFetcherId = 0
+
+const fetcherKey = (fetcher) => {
+  if (!fetcherIds.has(fetcher)) {
+    nextFetcherId += 1
+    fetcherIds.set(fetcher, `${fetcher.name || 'request'}#${nextFetcherId}`)
+  }
+  return fetcherIds.get(fetcher)
+}
+
+export const useAsync = (fetcher, args = [], { enabled = true, initialData, keepPrevious = true } = {}) => {
+  const queryClient = useQueryClient()
+  const queryKey = [fetcherKey(fetcher), ...args]
+  const seeded = initialData !== undefined && initialData !== null
+
+  const query = useQuery({
+    queryKey,
+    queryFn: () => fetcher(...args),
+    enabled,
+    ...(seeded ? { initialData, initialDataUpdatedAt: 0 } : {}),
+    placeholderData: keepPrevious ? keepPreviousData : undefined,
+  })
+
+  const keyHash = JSON.stringify(queryKey)
+  const { refetch } = query
+
+  const reload = useCallback(() => refetch(), [refetch])
+
+  const setData = useCallback(
+    (data) => queryClient.setQueryData(JSON.parse(keyHash), data),
+    [queryClient, keyHash],
   )
 
-  const requestKey = `${argsKey}#${reloadToken}`
-
-  useEffect(() => {
-    if (!enabled) return undefined
-
-    let cancelled = false
-    const key = `${argsKey}#${reloadToken}`
-
-    fetcher(...JSON.parse(argsKey))
-      .then((data) => {
-        if (!cancelled) setState({ key, data, error: null })
-      })
-      .catch((error) => {
-        if (!cancelled) setState({ key, data: null, error })
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [fetcher, argsKey, reloadToken, enabled])
-
-  const loading = enabled && state.key !== requestKey
-
-  const reload = useCallback(() => setReloadToken((token) => token + 1), [])
-
-  const setData = useCallback((data) => setState((current) => ({ ...current, data })), [])
-
   return {
-    data: state.data,
-    error: loading ? null : state.error,
-    loading,
+    data: query.data ?? null,
+    error: query.isError ? query.error : null,
+    loading: enabled && (query.isPending || (query.isFetching && query.isPlaceholderData)),
     reload,
     setData,
   }

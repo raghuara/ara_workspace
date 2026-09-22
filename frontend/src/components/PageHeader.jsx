@@ -77,7 +77,7 @@ export const PageHeader = ({ title, description, breadcrumbs = [], actions }) =>
       </Box>
 
       {actions ? (
-        <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexShrink: 0, flexWrap: 'wrap', alignItems: 'center' }}>
           {actions}
         </Stack>
       ) : null}

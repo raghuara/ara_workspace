@@ -29,7 +29,7 @@ const requireAuth = (req, res, next) => {
 // Runs after requireAuth. Loads the caller's current permissions from the
 // database (not the token) so a role edit takes effect immediately.
 // Usage: router.post("/", requireAuth, requirePermission("employee.update"), handler)
-const requirePermission = (...required) => async (req, res, next) => {
+const checkPermissions = (isAllowed) => async (req, res, next) => {
   const user = await userModel.findUserById(req.user.userId);
 
   if (!user || !user.is_active) {
@@ -43,9 +43,7 @@ const requirePermission = (...required) => async (req, res, next) => {
     ? user.permissions
     : JSON.parse(user.permissions);
 
-  const missing = required.filter((permission) => !granted.includes(permission));
-
-  if (missing.length > 0) {
+  if (!isAllowed(granted)) {
     return res.status(403).json({
       message: "You do not have permission to do this.",
       code: "FORBIDDEN"
@@ -56,7 +54,15 @@ const requirePermission = (...required) => async (req, res, next) => {
   next();
 };
 
+const requirePermission = (...required) =>
+  checkPermissions((granted) => required.every((permission) => granted.includes(permission)));
+
+// Passes when the caller holds at least one of the listed permissions.
+const requireAnyPermission = (...options) =>
+  checkPermissions((granted) => options.some((permission) => granted.includes(permission)));
+
 module.exports = {
   requireAuth,
-  requirePermission
+  requirePermission,
+  requireAnyPermission
 };

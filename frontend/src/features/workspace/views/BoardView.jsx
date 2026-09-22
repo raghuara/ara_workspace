@@ -4,6 +4,7 @@ import { Alert, Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui
 import { keyframes } from '@mui/material/styles'
 import { Plus } from 'lucide-react'
 import { StatusChip } from '@/components/StatusChip'
+import { GroupMenu } from '../components/GroupMenu'
 import { QuickAddCard } from '../components/QuickAddCard'
 import { TaskCard } from '../components/TaskCard'
 import { taskService } from '@/api/taskService'
@@ -109,12 +110,22 @@ const removeTask = (columns, taskId) =>
       : column,
   )
 
-export const BoardView = ({ board, loading, scope, onOpenTask, onAddGroup, onChanged, onBoardChange }) => {
+export const BoardView = ({
+  board,
+  loading,
+  scope,
+  onOpenTask,
+  onAddGroup,
+  onRemoveGroup,
+  onChanged,
+  onBoardChange,
+}) => {
   const { can } = usePermissions()
   const { activeWorkspaceId } = useWorkspace()
   const canMove = can(PERMISSIONS.TASK_MOVE)
   const { canEditTask, canCreateAnywhere } = useAccess()
   const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
+  const canManageGroups = can(PERMISSIONS.STATUS_MANAGE) && Boolean(onRemoveGroup)
 
   const columns = board?.columns ?? []
 
@@ -646,6 +657,14 @@ export const BoardView = ({ board, loading, scope, onOpenTask, onAddGroup, onCha
                   >
                     <Plus size={15} strokeWidth={2} />
                   </IconButton>
+                ) : null}
+                {canManageGroups ? (
+                  <GroupMenu
+                    column={column}
+                    color={tone.strong}
+                    onAddTask={canCreate ? () => setComposerColumnId(column.id) : undefined}
+                    onRemove={onRemoveGroup}
+                  />
                 ) : null}
               </Stack>
 

@@ -31,6 +31,11 @@ const USER_TYPE = {
   TEAM_LEAD: 4
 };
 
+const LIMITS = {
+  WORKSPACES: 10,
+  GROUPS_PER_WORKSPACE: 15
+};
+
 module.exports = {
   STATUS_KINDS,
   DEFAULT_STATUS_TEMPLATES,
@@ -38,5 +43,6 @@ module.exports = {
   PRIORITIES,
   TASK_SIZES,
   CLIENT_STATUSES,
-  USER_TYPE
+  USER_TYPE,
+  LIMITS
 };

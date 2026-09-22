@@ -1,45 +1,68 @@
 import { useEffect, useState } from 'react'
-import {
-  Badge,
-  Box,
-  Divider,
-  IconButton,
-  ListItemIcon,
-  ListItemText,
-  Menu,
-  MenuItem,
-  Stack,
-  Tooltip,
-  Typography,
-} from '@mui/material'
-import { Bell, BellOff, Check, ChevronDown, KeyRound, LogOut, Menu as MenuIcon, UserRound } from 'lucide-react'
+import { Badge, Box, Divider, IconButton, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material'
+import { Bell, BellOff, Check, ChevronDown, KeyRound, LogOut, Menu as MenuIcon, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { SearchField } from '@/components/SearchField'
+import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { ChangePasswordDialog } from '@/features/auth/ChangePasswordDialog'
 import { notificationService } from '@/api/notificationService'
 import { ROUTES, workspaceViewPath } from '@/constants/routes'
+import { STATUS_TONES } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useSession } from '@/hooks/useSession'
-import { usePermissions } from '@/hooks/usePermissions'
-import { PERMISSIONS } from '@/constants/permissions'
 import { colors, layout } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
 import { WorkspaceSwitcher } from './WorkspaceSwitcher'
+import { FiscalYearPicker } from '@/components/FiscalYearPicker'
+import { useWorkspace } from '@/hooks/useWorkspace'
+
+const menuPaper = (width) => ({
+  paper: {
+    sx: {
+      width,
+      maxWidth: 'calc(100vw - 24px)',
+      mt: 1,
+      borderRadius: 2.5,
+      boxShadow: '0 16px 40px rgba(15, 23, 42, 0.14), 0 2px 6px rgba(15, 23, 42, 0.06)',
+    },
+  },
+  list: { sx: { py: 0.75 } },
+})
+
+const itemSx = {
+  mx: 0.75,
+  my: 0.125,
+  px: 1.25,
+  py: 0.875,
+  borderRadius: 1.5,
+  gap: 1.25,
+  alignItems: 'center',
+}
+
+const sectionLabelSx = {
+  px: 2,
+  pt: 1,
+  pb: 0.5,
+  fontSize: '0.6875rem',
+  fontWeight: 700,
+  letterSpacing: '0.07em',
+  textTransform: 'uppercase',
+  color: colors.textSecondary,
+}
 
 export const Header = ({ onOpenSidebar }) => {
   const navigate = useNavigate()
   const { user, role, roles, switchRole, logout } = useSession()
-  const { can } = usePermissions()
+  const { activeWorkspace } = useWorkspace()
   const inbox = useAsync(notificationService.listNotifications, [])
   const notifications = inbox.data?.items ?? []
 
-  const [search, setSearch] = useState('')
   const [notificationAnchor, setNotificationAnchor] = useState(null)
   const [profileAnchor, setProfileAnchor] = useState(null)
   const [passwordOpen, setPasswordOpen] = useState(false)
 
   const unreadCount = inbox.data?.unreadCount ?? 0
+  const profileOpen = Boolean(profileAnchor)
 
   useEffect(() => {
     const timer = setInterval(() => inbox.reload(), 60000)
@@ -68,14 +91,6 @@ export const Header = ({ onOpenSidebar }) => {
     inbox.reload()
   }
 
-  const submitSearch = (event) => {
-    event.preventDefault()
-    const term = search.trim()
-    if (!term) return
-    navigate(`${ROUTES.employees}?search=${encodeURIComponent(term)}`)
-    setSearch('')
-  }
-
   const handleRoleChange = async (roleId) => {
     setProfileAnchor(null)
     if (roleId !== role?.id) await switchRole(roleId)
@@ -95,35 +110,22 @@ export const Header = ({ onOpenSidebar }) => {
         px: { xs: 1.5, sm: 2, md: 3 },
       }}
     >
-      <IconButton
-        onClick={onOpenSidebar}
-        aria-label="Open navigation"
-        sx={{ display: { lg: 'none' }, ml: -0.5 }}
-      >
+      <IconButton onClick={onOpenSidebar} aria-label="Open navigation" sx={{ display: { lg: 'none' }, ml: -0.5 }}>
         <MenuIcon size={20} strokeWidth={1.75} />
       </IconButton>
 
       <WorkspaceSwitcher />
 
-      {can(PERMISSIONS.EMPLOYEE_VIEW) ? (
-        <Box component="form" onSubmit={submitSearch} sx={{ flex: 1, maxWidth: 420, minWidth: 0 }}>
-          <SearchField
-            value={search}
-            onChange={setSearch}
-            label="Search employees"
-            placeholder="Search employees…"
-            fullWidth
-          />
-        </Box>
-      ) : (
-        <Box sx={{ flex: 1 }} />
-      )}
+      {activeWorkspace ? <FiscalYearPicker /> : null}
 
-      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', ml: 'auto' }}>
+      <Box sx={{ flex: 1 }} />
+
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>
         <Tooltip title="Notifications">
           <IconButton
             onClick={(event) => setNotificationAnchor(event.currentTarget)}
             aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}
+            sx={{ width: 40, height: 40, borderRadius: 2 }}
           >
             <Badge
               badgeContent={unreadCount}
@@ -141,30 +143,45 @@ export const Header = ({ onOpenSidebar }) => {
           onClick={(event) => setProfileAnchor(event.currentTarget)}
           aria-label="Account menu"
           aria-haspopup="menu"
+          aria-expanded={profileOpen}
           sx={{
             display: 'flex',
             alignItems: 'center',
             gap: 1,
-            border: `1px solid ${colors.border}`,
-            borderRadius: 2,
-            bgcolor: 'transparent',
+            height: 40,
+            pl: 0.5,
+            pr: { xs: 0.5, md: 1 },
+            border: 0,
+            borderRadius: 999,
+            bgcolor: profileOpen ? colors.brandSoft : 'transparent',
             cursor: 'pointer',
-            px: 1,
-            py: 0.5,
-            ml: 0.5,
-            '&:hover': { bgcolor: colors.neutralSoft },
+            textAlign: 'left',
+            font: 'inherit',
+            transition: 'background-color 140ms ease, box-shadow 140ms ease, transform 120ms ease',
+            '&:hover': { bgcolor: profileOpen ? colors.brandSoft : colors.neutralSoft },
+            '&:active': { transform: 'scale(0.985)' },
+            '&:focus-visible': { outline: 'none', boxShadow: `0 0 0 2px ${colors.surface}, 0 0 0 4px ${colors.brand}` },
           }}
         >
-          <UserAvatar name={user?.name} size={30} />
-          <Box sx={{ textAlign: 'left', display: { xs: 'none', md: 'block' }, minWidth: 0 }}>
-            <Typography variant="body2" fontWeight={600} noWrap>
+          <UserAvatar name={user?.name} size={32} />
+          <Box sx={{ display: { xs: 'none', md: 'block' }, minWidth: 0, maxWidth: 180 }}>
+            <Typography variant="body2" fontWeight={600} noWrap sx={{ lineHeight: 1.25, color: colors.textPrimary }}>
               {user?.name}
             </Typography>
-            <Typography variant="caption" component="p" noWrap>
+            <Typography variant="caption" component="p" noWrap sx={{ lineHeight: 1.25 }}>
               {role?.name}
             </Typography>
           </Box>
-          <ChevronDown size={15} strokeWidth={1.75} color={colors.textSecondary} aria-hidden="true" />
+          <Box
+            sx={{
+              display: { xs: 'none', md: 'inline-flex' },
+              color: colors.textSecondary,
+              transition: 'transform 160ms ease',
+              transform: profileOpen ? 'rotate(180deg)' : 'none',
+            }}
+          >
+            <ChevronDown size={14} strokeWidth={1.75} aria-hidden="true" />
+          </Box>
         </Box>
       </Stack>
 
@@ -174,9 +191,9 @@ export const Header = ({ onOpenSidebar }) => {
         onClose={() => setNotificationAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { width: 340, maxWidth: '90vw' } } }}
+        slotProps={menuPaper(340)}
       >
-        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1.25 }}>
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', px: 2, pt: 0.75, pb: 1 }}>
           <Typography variant="h4">Notifications</Typography>
           {unreadCount > 0 ? (
             <Typography
@@ -184,7 +201,7 @@ export const Header = ({ onOpenSidebar }) => {
               type="button"
               variant="caption"
               onClick={markAllRead}
-              sx={{ border: 0, bgcolor: 'transparent', color: colors.brand, cursor: 'pointer', fontWeight: 600, p: 0 }}
+              sx={{ border: 0, bgcolor: 'transparent', color: colors.brand, cursor: 'pointer', fontWeight: 600, p: 0, font: 'inherit', fontSize: '0.75rem' }}
             >
               Mark all as read
             </Typography>
@@ -201,7 +218,7 @@ export const Header = ({ onOpenSidebar }) => {
           <MenuItem
             key={notification.id}
             onClick={() => openNotification(notification)}
-            sx={{ alignItems: 'flex-start', py: 1.25, whiteSpace: 'normal', bgcolor: notification.unread ? colors.brandSoft : 'transparent' }}
+            sx={{ ...itemSx, alignItems: 'flex-start', whiteSpace: 'normal', bgcolor: notification.unread ? colors.brandSoft : 'transparent' }}
           >
             <Box
               aria-hidden="true"
@@ -210,7 +227,6 @@ export const Header = ({ onOpenSidebar }) => {
                 height: 7,
                 borderRadius: '50%',
                 mt: 0.75,
-                mr: 1.5,
                 flexShrink: 0,
                 bgcolor: notification.unread ? colors.brand : 'transparent',
               }}
@@ -229,74 +245,118 @@ export const Header = ({ onOpenSidebar }) => {
 
       <Menu
         anchorEl={profileAnchor}
-        open={Boolean(profileAnchor)}
+        open={profileOpen}
         onClose={() => setProfileAnchor(null)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
         transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        slotProps={{ paper: { sx: { width: 288 } } }}
+        slotProps={menuPaper(304)}
       >
-        <Box sx={{ px: 2, py: 1.5 }}>
-          <Typography variant="body2" fontWeight={600}>
-            {user?.name}
-          </Typography>
-          <Typography variant="caption" component="p">
-            {user?.email}
-          </Typography>
-        </Box>
-        <Divider />
-        {roles.length > 0 && (
-          <>
-            <Typography variant="subtitle2" component="p" sx={{ px: 2, pt: 1.5, pb: 0.5 }}>
+        <Stack
+          direction="row"
+          spacing={1.5}
+          sx={{
+            alignItems: 'center',
+            mx: 0.75,
+            mt: 0.25,
+            mb: 0.5,
+            px: 1.5,
+            py: 1.5,
+            borderRadius: 2,
+            background: `linear-gradient(135deg, ${colors.brandSoft} 0%, ${colors.surface} 100%)`,
+            border: `1px solid ${colors.border}`,
+          }}
+        >
+          <UserAvatar name={user?.name} size={44} />
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="body2" sx={{ fontWeight: 650, lineHeight: 1.3 }} noWrap>
+              {user?.name}
+            </Typography>
+            <Typography variant="caption" component="p" noWrap sx={{ lineHeight: 1.3, mb: 0.75 }}>
+              {user?.email}
+            </Typography>
+            <ToneChip label={role?.name ?? 'Member'} tone="blue" icon={ShieldCheck} />
+          </Box>
+        </Stack>
+
+        {roles.length > 1 ? (
+          <Box>
+            <Typography component="p" sx={sectionLabelSx}>
               Switch role
             </Typography>
-            {roles.map((option) => (
-              <MenuItem key={option.id} onClick={() => handleRoleChange(option.id)} sx={{ py: 1 }}>
-                <ListItemIcon>
-                  {option.id === role?.id ? (
-                    <Check size={16} strokeWidth={2} color={colors.brand} aria-hidden="true" />
-                  ) : (
-                    <UserRound size={16} strokeWidth={1.75} aria-hidden="true" />
-                  )}
-                </ListItemIcon>
-                <ListItemText
-                  primary={option.name}
-                  secondary={option.description}
-                  slotProps={{
-                    primary: { fontSize: '0.8125rem', fontWeight: option.id === role?.id ? 600 : 500 },
-                    secondary: { fontSize: '0.75rem' },
-                  }}
-                />
-              </MenuItem>
-            ))}
-            <Divider />
-          </>
-        )}
+            {roles.map((option) => {
+              const selected = option.id === role?.id
+              return (
+                <MenuItem
+                  key={option.id}
+                  selected={selected}
+                  onClick={() => handleRoleChange(option.id)}
+                  sx={{ ...itemSx, '&.Mui-selected': { bgcolor: colors.brandSoft, '&:hover': { bgcolor: colors.brandTint } } }}
+                >
+                  <Box
+                    aria-hidden="true"
+                    sx={{
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      flexShrink: 0,
+                      display: 'grid',
+                      placeItems: 'center',
+                      border: `2px solid ${selected ? colors.brand : colors.border}`,
+                      bgcolor: selected ? colors.brand : 'transparent',
+                      color: '#FFFFFF',
+                    }}
+                  >
+                    {selected ? <Check size={11} strokeWidth={3} /> : null}
+                  </Box>
+                  <Box sx={{ minWidth: 0, flex: 1 }}>
+                    <Typography variant="body2" noWrap sx={{ fontWeight: selected ? 650 : 500, lineHeight: 1.3 }}>
+                      {option.name}
+                    </Typography>
+                    {option.description ? (
+                      <Typography variant="caption" component="p" noWrap sx={{ lineHeight: 1.3 }}>
+                        {option.description}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                </MenuItem>
+              )
+            })}
+            <Divider sx={{ my: 0.75 }} />
+          </Box>
+        ) : null}
+
         <MenuItem
-          sx={{ py: 1.25 }}
           onClick={() => {
             setProfileAnchor(null)
             setPasswordOpen(true)
           }}
+          sx={itemSx}
         >
-          <ListItemIcon>
+          <Box sx={{ display: 'inline-flex', color: colors.textSecondary }}>
             <KeyRound size={16} strokeWidth={1.75} aria-hidden="true" />
-          </ListItemIcon>
-          <ListItemText primary="Change password" slotProps={{ primary: { fontSize: '0.8125rem' } }} />
+          </Box>
+          <Typography variant="body2" sx={{ fontWeight: 500 }}>
+            Change password
+          </Typography>
         </MenuItem>
+
         <MenuItem
-          sx={{ py: 1.25 }}
           onClick={async () => {
             setProfileAnchor(null)
             await logout()
             navigate(ROUTES.login, { replace: true })
           }}
+          sx={{ ...itemSx, color: STATUS_TONES.rose.strong, '&:hover': { bgcolor: STATUS_TONES.rose.soft } }}
         >
-          <ListItemIcon>
+          <Box sx={{ display: 'inline-flex' }}>
             <LogOut size={16} strokeWidth={1.75} aria-hidden="true" />
-          </ListItemIcon>
-          <ListItemText primary="Sign out" slotProps={{ primary: { fontSize: '0.8125rem' } }} />
+          </Box>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: 'inherit' }}>
+            Sign out
+          </Typography>
         </MenuItem>
       </Menu>
+
       <ChangePasswordDialog open={passwordOpen} onClose={() => setPasswordOpen(false)} />
     </Box>
   )

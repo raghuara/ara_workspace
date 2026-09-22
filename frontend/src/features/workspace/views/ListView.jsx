@@ -26,6 +26,7 @@ import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { EmptyState } from '@/components/EmptyState'
+import { GroupMenu } from '../components/GroupMenu'
 import { QuickAddCard } from '../components/QuickAddCard'
 import { taskService } from '@/api/taskService'
 import { PERMISSIONS } from '@/constants/permissions'
@@ -323,20 +324,21 @@ const TaskRow = ({ task, columns, canMove, canUpdate, onOpenTask, onChanged, onE
   )
 }
 
-export const ListView = ({ board, loading, onOpenTask, onAddTask, onChanged }) => {
+export const ListView = ({ board, loading, onOpenTask, onAddTask, onRemoveGroup, onChanged }) => {
   const { can } = usePermissions()
   const { columns } = useWorkspace()
   const canMove = can(PERMISSIONS.TASK_MOVE)
   const canUpdate = can(PERMISSIONS.TASK_UPDATE)
   const { canEditTask, canCreateAnywhere } = useAccess()
   const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
+  const canManageGroups = can(PERMISSIONS.STATUS_MANAGE) && Boolean(onRemoveGroup)
   const [editingTaskId, setEditingTaskId] = useState(null)
 
   const [collapsed, setCollapsed] = useState({})
 
   if (loading && !board) return <LinearProgress aria-label="Loading tasks" />
 
-  const groups = board?.columns.filter((column) => column.tasks.length > 0 || canCreate) ?? []
+  const groups = board?.columns.filter((column) => column.tasks.length > 0 || canCreate || canManageGroups) ?? []
   if (groups.length === 0) {
     return <EmptyState title="No tasks match these filters" description="Try widening the filters above." />
   }
@@ -388,6 +390,7 @@ export const ListView = ({ board, loading, onOpenTask, onAddTask, onChanged }) =
                   Add task
                 </Button>
               ) : null}
+              {canManageGroups ? <GroupMenu column={column} color={tone.strong} onRemove={onRemoveGroup} /> : null}
             </Stack>
 
             {isOpen ? (

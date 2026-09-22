@@ -4,6 +4,7 @@ const accountModel = require("../models/account.model");
 const workspaceModel = require("../models/workspace.model");
 const access = require("../services/access.service");
 const { USER_TYPE } = require("../constants/workspace");
+const { withTransaction } = require("../utils/transaction");
 
 const PASSWORD_PATTERN = /^(?=.*[A-Za-z])(?=.*\d).{8,}$/;
 const PASSWORD_RULE = "Password must be at least 8 characters and include a letter and a number.";
@@ -58,6 +59,45 @@ const canManageAccount = (req, account, assignable) =>
   account.user_id === null ||
   assignable.some((userType) => userType.id === account.user_type_id);
 
+const names = (items) => items.map((item) => item.name).join(", ");
+
+const BLOCK_REASONS = {
+  owner: (list) => `they own ${list}`,
+  "only-admin": (list) => `they are the only admin of ${list} — add another admin there first`,
+  outside: (list) => `they are also an admin of ${list}, which you do not manage`
+};
+
+const findAdminConflicts = async (req, employeeId) => {
+  const workspaces = await workspaceModel.findAdminWorkspacesFor(employeeId);
+  if (workspaces.length === 0) return [];
+  const allowed = await access.allowedWorkspaceIds(req);
+  return workspaces.map((workspace) => ({
+    id: workspace.id,
+    name: workspace.name,
+    reason: workspace.isOwner
+      ? "owner"
+      : workspace.adminCount <= 1
+        ? "only-admin"
+        : !access.inScope(allowed, workspace.id)
+          ? "outside"
+          : null
+  }));
+};
+
+const blockedByAdminRole = (res, fullName, conflicts) => {
+  const parts = Object.entries(BLOCK_REASONS)
+    .map(([reason, describe]) => {
+      const matching = conflicts.filter((item) => item.reason === reason);
+      return matching.length ? describe(names(matching)) : null;
+    })
+    .filter(Boolean);
+  return res.status(409).json({
+    message: `${fullName} cannot be an Employee yet: ${parts.join("; ")}.`,
+    code: "WORKSPACE_ADMIN_REQUIRED",
+    errors: { workspaces: conflicts }
+  });
+};
+
 const listAccounts = async (req, res) => {
   const workspaceId = text(req.query.workspaceId);
   const allowed = await access.allowedWorkspaceIds(req);
@@ -107,6 +147,15 @@ const createAccount = async (req, res) => {
 
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
 
+  if (userTypeId === USER_TYPE.EMPLOYEE) {
+    const conflicts = await findAdminConflicts(req, employeeId);
+    if (conflicts.length > 0) {
+      return badRequest(res, "Please fix the highlighted fields.", {
+        userTypeId: `${employee.full_name} is an admin of ${names(conflicts)}. Employees cannot be workspace admins — choose Admin or another user type, or remove them as admin in Setup › Workspaces first.`
+      });
+    }
+  }
+
   const temporaryPassword = password || generatePassword();
   await accountModel.insertAccount({
     employeeId,
@@ -147,7 +196,26 @@ const updateAccount = async (req, res) => {
     return badRequest(res, "At least one active Master Admin login must remain.");
   }
 
-  await accountModel.updateAccount(account.user_id, { userTypeId, isActive });
+  const becomesEmployee = userTypeId === USER_TYPE.EMPLOYEE && account.user_type_id !== USER_TYPE.EMPLOYEE;
+  const conflicts = becomesEmployee ? await findAdminConflicts(req, account.employee_id) : [];
+  if (conflicts.some((item) => item.reason)) return blockedByAdminRole(res, account.full_name, conflicts);
+  if (conflicts.length > 0 && req.body.removeFromWorkspaceAdmins !== true) {
+    return res.status(409).json({
+      message: `${account.full_name} is an admin of ${names(conflicts)}. Employees cannot be workspace admins, so this change removes them as admin there.`,
+      code: "WORKSPACE_ADMIN_CONFLICT",
+      errors: { workspaces: conflicts }
+    });
+  }
+
+  await withTransaction(async (connection) => {
+    await accountModel.updateAccount(account.user_id, { userTypeId, isActive }, connection);
+    await workspaceModel.removeAdminFromWorkspaces(
+      account.employee_id,
+      conflicts.map((item) => item.id),
+      USER_TYPE.EMPLOYEE,
+      connection
+    );
+  });
   res.json({ ...mapAccount(await accountModel.findAccountByEmployeeId(account.employee_id)), canManage: true });
 };
 

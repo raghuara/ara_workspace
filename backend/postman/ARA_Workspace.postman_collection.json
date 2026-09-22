@@ -1,0 +1,2638 @@
+{
+  "info": {
+    "name": "ARA Workspace API",
+    "description": "Every endpoint of the ARA Workspace backend.\n\n1. Select the **ARA Workspace – Local** environment.\n2. Run **Auth → Login** — its test script stores `token` and `employeeId` for every other request.\n3. Run **Workspaces → List workspaces** — it stores the first `workspaceId`.\n\nAll other requests use Bearer `{{token}}` from the collection auth.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [],
+  "item": [
+    {
+      "name": "Health",
+      "description": "No login needed",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "health"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "description": "Sign in, session, own password",
+      "item": [
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const data = pm.response.json();",
+                  "if (data.token) {",
+                  "  pm.environment.set('token', data.token);",
+                  "  pm.environment.set('employeeId', data.session.user.id);",
+                  "  const [first] = data.session.workspaceIds || [];",
+                  "  if (first) pm.environment.set('workspaceId', first);",
+                  "}",
+                  "pm.test('logged in', () => pm.expect(pm.response.code).to.eql(200));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "auth": {
+              "type": "noauth"
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{loginEmail}}\",\n  \"password\": \"{{loginPassword}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "login"
+              ]
+            },
+            "description": "Rate limited: 20 attempts per 15 minutes per IP."
+          },
+          "response": []
+        },
+        {
+          "name": "Me (current session)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "me"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Change my password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"OldPass123\",\n  \"newPassword\": \"NewPass456\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/change-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "auth",
+                "change-password"
+              ]
+            },
+            "description": "At least 8 characters with a letter and a number."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "description": "Companies / entities. Master Admin sees all; others only the ones they belong to.",
+      "item": [
+        {
+          "name": "List workspaces",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const rows = pm.response.json();",
+                  "if (Array.isArray(rows) && rows[0]) pm.environment.set('workspaceId', rows[0].id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create workspace",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"G10\",\n  \"shortName\": \"G10\",\n  \"description\": \"Second company\",\n  \"tone\": \"teal\",\n  \"adminIds\": [\n    \"{{employeeId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces"
+              ]
+            },
+            "description": "Needs workspace.create. adminIds must have at least one employee."
+          },
+          "response": []
+        },
+        {
+          "name": "Get workspace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update workspace",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"G10\",\n  \"shortName\": \"G10\",\n  \"description\": \"Updated\",\n  \"tone\": \"blue\",\n  \"adminIds\": [\n    \"{{employeeId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}"
+              ]
+            },
+            "description": "Send only the fields you want to change. adminIds replaces the admin list."
+          },
+          "response": []
+        },
+        {
+          "name": "Delete workspace",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Structure (groups, teams, members, access)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/structure",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "structure"
+              ]
+            },
+            "description": "Returns only the groups/teams the caller can see, plus `access` for the caller and `grants` per member."
+          },
+          "response": []
+        },
+        {
+          "name": "Summary for dashboard",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/summary?groupId=&teamId=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "summary"
+              ],
+              "query": [
+                {
+                  "key": "groupId",
+                  "value": "",
+                  "description": "optional",
+                  "disabled": true
+                },
+                {
+                  "key": "teamId",
+                  "value": "",
+                  "description": "optional",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Groups & Teams",
+      "description": "",
+      "item": [
+        {
+          "name": "Create group",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Group A\",\n  \"tone\": \"blue\",\n  \"leadId\": \"{{employeeId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/groups",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "groups"
+              ]
+            },
+            "description": "The lead automatically gets Edit access on the group."
+          },
+          "response": []
+        },
+        {
+          "name": "Update group",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Group A\",\n  \"tone\": \"green\",\n  \"leadId\": \"{{employeeId}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete group",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create team",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Team 1\",\n  \"leadId\": \"{{employeeId}}\",\n  \"memberIds\": [\n    \"{{employeeId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/groups/{{groupId}}/teams",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "groups",
+                "{{groupId}}",
+                "teams"
+              ]
+            },
+            "description": "Lead and members automatically get Edit access on the team."
+          },
+          "response": []
+        },
+        {
+          "name": "Update team",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Team 1\",\n  \"leadId\": \"{{employeeId}}\",\n  \"memberIds\": [\n    \"{{employeeId}}\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete team",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/teams/{{teamId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "teams",
+                "{{teamId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Board columns",
+      "description": "Status columns of a workspace board",
+      "item": [
+        {
+          "name": "List columns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/columns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "columns"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create columns",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"entries\": [\n    {\n      \"name\": \"Review\",\n      \"tone\": \"amber\",\n      \"kind\": \"custom\",\n      \"wipLimit\": null\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/columns",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "columns"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update column",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"In review\",\n  \"tone\": \"amber\",\n  \"wipLimit\": 5,\n  \"order\": 3\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/columns/{{columnId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "columns",
+                "{{columnId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete column",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/columns/{{columnId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "columns",
+                "{{columnId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Members & Access",
+      "description": "Who is in a workspace and where they can View / Edit",
+      "item": [
+        {
+          "name": "Add member",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"EMP-0005\",\n  \"userTypeId\": 3,\n  \"groupId\": null,\n  \"teamId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "members"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set member access",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspace\": \"view\",\n  \"groups\": {\n    \"GRP-001\": \"edit\",\n    \"GRP-002\": \"view\"\n  },\n  \"teams\": {\n    \"TEAM-001\": \"edit\"\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/members/EMP-0005/access",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "members",
+                "EMP-0005",
+                "access"
+              ]
+            },
+            "description": "workspace: 'view' | 'edit' | null. groups/teams: map of id → 'view' | 'edit'. Most specific wins (team > group > workspace). Admins of the workspace bypass grants."
+          },
+          "response": []
+        },
+        {
+          "name": "Remove member",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/members/EMP-0005",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "members",
+                "EMP-0005"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "description": "Visibility and edit rights come from the member access grants",
+      "item": [
+        {
+          "name": "Board (columns with tasks)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/board?search=&groupId=&teamId=&assigneeId=&clientId=&priority=&sizeKey=&tab=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "board"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "groupId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "teamId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "assigneeId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "clientId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "priority",
+                  "value": "",
+                  "description": "Low | Normal | High | Urgent",
+                  "disabled": true
+                },
+                {
+                  "key": "sizeKey",
+                  "value": "",
+                  "description": "XS | S | M | L | XL",
+                  "disabled": true
+                },
+                {
+                  "key": "tab",
+                  "value": "",
+                  "description": "mine | overdue | today",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List tasks (flat)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/tasks?search=&groupId=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "tasks"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "groupId",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create task",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const t = pm.response.json(); if (t && t.id) pm.environment.set('taskId', t.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Prepare monthly report\",\n  \"description\": \"Optional details\",\n  \"statusId\": \"COL-001\",\n  \"groupId\": \"GRP-001\",\n  \"teamId\": null,\n  \"clientId\": null,\n  \"assigneeIds\": [\n    \"{{employeeId}}\"\n  ],\n  \"priority\": \"Normal\",\n  \"sizeKey\": \"M\",\n  \"dueDate\": \"2026-09-30\",\n  \"scheduledDate\": null,\n  \"tags\": []\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "tasks"
+              ]
+            },
+            "description": "Without task.assign the task is assigned to the caller. Needs Edit access on the group/team."
+          },
+          "response": []
+        },
+        {
+          "name": "Get task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update task",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Prepare monthly report (v2)\",\n  \"priority\": \"High\",\n  \"dueDate\": \"2026-10-02\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}"
+              ]
+            },
+            "description": "Partial update — send only changed fields."
+          },
+          "response": []
+        },
+        {
+          "name": "Move task",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statusId\": \"COL-002\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/move",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "move"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Task history",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}/history",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}",
+                "history"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete task",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/tasks/{{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "tasks",
+                "{{taskId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Workload report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/workload",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "workload"
+              ]
+            },
+            "description": "Needs report.view."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Recurring tasks",
+      "description": "Rules that spawn tasks on a schedule",
+      "item": [
+        {
+          "name": "List rules",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/recurring-tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "recurring-tasks"
+              ]
+            },
+            "description": "Each rule carries `canEdit` for the caller."
+          },
+          "response": []
+        },
+        {
+          "name": "Create rule",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json(); if (r && r.id) pm.environment.set('ruleId', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekly status update\",\n  \"description\": \"\",\n  \"groupId\": \"GRP-001\",\n  \"teamId\": null,\n  \"clientId\": null,\n  \"assigneeIds\": [\n    \"{{employeeId}}\"\n  ],\n  \"perAssignee\": false,\n  \"priority\": \"Normal\",\n  \"sizeKey\": \"S\",\n  \"schedule\": {\n    \"frequency\": \"weekly\",\n    \"weekdays\": [\n      1,\n      3,\n      5\n    ],\n    \"monthDays\": []\n  },\n  \"dueOffsetDays\": 0,\n  \"startDate\": \"2026-09-17\",\n  \"endDate\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceId}}/recurring-tasks",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "workspaces",
+                "{{workspaceId}}",
+                "recurring-tasks"
+              ]
+            },
+            "description": "schedule.frequency: weekly (weekdays 0–6, Sunday = 0) or monthly (monthDays 1–31)."
+          },
+          "response": []
+        },
+        {
+          "name": "Get rule",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recurring-tasks/{{ruleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "recurring-tasks",
+                "{{ruleId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update rule",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekly status update\",\n  \"priority\": \"High\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recurring-tasks/{{ruleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "recurring-tasks",
+                "{{ruleId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pause / resume rule",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/recurring-tasks/{{ruleId}}/status",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "recurring-tasks",
+                "{{ruleId}}",
+                "status"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete rule",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/recurring-tasks/{{ruleId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "recurring-tasks",
+                "{{ruleId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Clients",
+      "description": "Scoped to the caller's workspaces",
+      "item": [
+        {
+          "name": "List clients",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clients?workspaceId={{workspaceId}}&search=&status=&page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Active | Inactive",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Client options (for pickers)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clients/options?workspaceId={{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "options"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create client",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const c = pm.response.json(); if (c && c.id) pm.environment.set('clientId', c.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"name\": \"Acme Ltd\",\n  \"company\": \"Acme\",\n  \"contactName\": \"Jane\",\n  \"email\": \"jane@acme.com\",\n  \"phone\": \"\",\n  \"tone\": \"blue\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update client",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Acme Ltd\",\n  \"status\": \"Active\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete client",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/clients/{{clientId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "clients",
+                "{{clientId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Employees",
+      "description": "Per workspace. Master Admin may omit workspaceId to see everyone.",
+      "item": [
+        {
+          "name": "List employees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/employees?workspaceId={{workspaceId}}&search=&department=&status=&page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "department",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Active | Probation | Notice Period | Inactive",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Onboard employee",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"firstName\": \"Nimal\",\n  \"lastName\": \"Perera\",\n  \"email\": \"nimal@example.com\",\n  \"phone\": \"\",\n  \"department\": \"Engineering\",\n  \"designation\": \"Software Engineer\",\n  \"joiningDate\": \"2026-09-17\",\n  \"status\": \"Active\",\n  \"employmentType\": \"Full-time\",\n  \"workLocation\": \"Colombo HQ\",\n  \"reportingManagerId\": null\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees"
+              ]
+            },
+            "description": "department and designation must exist (active) in that workspace — see Catalogs."
+          },
+          "response": []
+        },
+        {
+          "name": "Get employee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update employee",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"phone\": \"0771234567\",\n  \"designation\": \"Senior Software Engineer\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Direct reports",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/employees/{{employeeId}}/direct-reports",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "{{employeeId}}",
+                "direct-reports"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import: download template (.xlsx)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/employees/import/template?workspaceId={{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "import",
+                "template"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                }
+              ]
+            },
+            "description": "Use \"Send and Download\" in Postman."
+          },
+          "response": []
+        },
+        {
+          "name": "Import: preview",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": "",
+                  "description": "the filled .xlsx"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees/import/preview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "import",
+                "preview"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Import: run",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "createLogins",
+                  "value": "true",
+                  "type": "text"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/employees/import",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "employees",
+                "import"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Catalogs (Departments & Designations)",
+      "description": "Per workspace. Same shape for both.",
+      "item": [
+        {
+          "name": "List departments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/departments?workspaceId={{workspaceId}}&active=true",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                },
+                {
+                  "key": "active",
+                  "value": "true",
+                  "description": "only active ones",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create department",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"name\": \"Engineering\",\n  \"description\": \"\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/departments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update department",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Engineering\",\n  \"description\": \"Product engineering\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/departments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete department",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/departments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "departments",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "List designations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/designations?workspaceId={{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "designations"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create designation",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"workspaceId\": \"{{workspaceId}}\",\n  \"name\": \"Software Engineer\",\n  \"description\": \"\",\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/designations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "designations"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update designation",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Software Engineer\",\n  \"isActive\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/designations/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "designations",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete designation",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/designations/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "designations",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Performance reviews",
+      "description": "Behind the Performance feature switch; needs review.view / review.update",
+      "item": [
+        {
+          "name": "List reviews",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews?search=&status=&department=&reviewPeriod=&employeeId=&page=1&pageSize=10",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews"
+              ],
+              "query": [
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "status",
+                  "value": "",
+                  "description": "Draft | In Progress | Pending Employee | Completed",
+                  "disabled": true
+                },
+                {
+                  "key": "department",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "reviewPeriod",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "employeeId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "pageSize",
+                  "value": "10",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Pending reviews",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews/pending?limit=5",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews",
+                "pending"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "5",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Review periods",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews/periods",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews",
+                "periods"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reviews for an employee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews/employee/{{employeeId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews",
+                "employee",
+                "{{employeeId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create review",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const r = pm.response.json(); if (r && r.id) pm.environment.set('reviewId', r.id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"EMP-0005\",\n  \"reviewerId\": \"{{employeeId}}\",\n  \"reviewPeriod\": \"Q3 2026\",\n  \"status\": \"Draft\",\n  \"overallRating\": null,\n  \"strengths\": [\n    \"Ownership\"\n  ],\n  \"improvementAreas\": [\n    \"Estimation\"\n  ],\n  \"managerComments\": \"\",\n  \"employeeComments\": \"\",\n  \"goals\": [\n    {\n      \"title\": \"Ship reporting module\",\n      \"progress\": 20,\n      \"status\": \"On Track\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get review",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews/{{reviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews",
+                "{{reviewId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update review",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"Completed\",\n  \"overallRating\": 4.5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews/{{reviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews",
+                "{{reviewId}}"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete review",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/performance/reviews/{{reviewId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "performance",
+                "reviews",
+                "{{reviewId}}"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Dashboard",
+      "description": "",
+      "item": [
+        {
+          "name": "Overview (all my workspaces)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/overview",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "overview"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Employee stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/employees",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "employees"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Recent employees",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/dashboard/recent-employees?limit=6",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "dashboard",
+                "recent-employees"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "6",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Activity log",
+      "description": "",
+      "item": [
+        {
+          "name": "List activity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/activity?workspaceId={{workspaceId}}&search=&action=&actorId=&page=1&pageSize=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "activity"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": true
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "action",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "actorId",
+                  "value": "",
+                  "disabled": true
+                },
+                {
+                  "key": "page",
+                  "value": "1",
+                  "disabled": false
+                },
+                {
+                  "key": "pageSize",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Actors (people who did something)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/activity/actors?workspaceId={{workspaceId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "activity",
+                "actors"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": true
+                }
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Notifications",
+      "description": "For the signed-in person",
+      "item": [
+        {
+          "name": "List notifications",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications?limit=20",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications"
+              ],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark one read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/1/read",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "1",
+                "read"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Mark all read",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/notifications/read-all",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "notifications",
+                "read-all"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Attachments",
+      "description": "Images on tasks (Azure Blob). ownerType: task | employee",
+      "item": [
+        {
+          "name": "List attachments",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/attachments?ownerType=task&ownerId={{taskId}}",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attachments"
+              ],
+              "query": [
+                {
+                  "key": "ownerType",
+                  "value": "task",
+                  "disabled": false
+                },
+                {
+                  "key": "ownerId",
+                  "value": "{{taskId}}",
+                  "disabled": false
+                }
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Upload attachment",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "ownerType",
+                  "value": "task",
+                  "type": "text"
+                },
+                {
+                  "key": "ownerId",
+                  "value": "{{taskId}}",
+                  "type": "text"
+                },
+                {
+                  "key": "category",
+                  "value": "",
+                  "type": "text",
+                  "description": "optional"
+                },
+                {
+                  "key": "file",
+                  "type": "file",
+                  "src": ""
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/attachments",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attachments"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete attachment",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/attachments/1",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "attachments",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin: User types",
+      "description": "Global roles = what someone can do",
+      "item": [
+        {
+          "name": "List user types",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/user-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "user-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Members of a user type",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/user-types/4/members",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "user-types",
+                "4",
+                "members"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create user type",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Reviewer\",\n  \"description\": \"Read-only board\",\n  \"tone\": \"orange\",\n  \"permissions\": [\n    \"workspace.view\",\n    \"task.view\",\n    \"dashboard.view\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/user-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "user-types"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Duplicate user type",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/user-types/4/duplicate",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "user-types",
+                "4",
+                "duplicate"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Update user type",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Reviewer\",\n  \"permissions\": [\n    \"workspace.view\",\n    \"task.view\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/user-types/6",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "user-types",
+                "6"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Delete user type",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/user-types/6",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "user-types",
+                "6"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin: Accounts (logins)",
+      "description": "Needs account.manage. Scoped to the caller's workspaces.",
+      "item": [
+        {
+          "name": "List accounts",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/accounts?workspaceId={{workspaceId}}&search=",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "accounts"
+              ],
+              "query": [
+                {
+                  "key": "workspaceId",
+                  "value": "{{workspaceId}}",
+                  "disabled": false
+                },
+                {
+                  "key": "search",
+                  "value": "",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Each row has hasAccount and canManage."
+          },
+          "response": []
+        },
+        {
+          "name": "User types I can grant",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/accounts/user-types",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "accounts",
+                "user-types"
+              ]
+            },
+            "description": "Only types whose permissions are a subset of the caller's; Master Admin only for Master Admin."
+          },
+          "response": []
+        },
+        {
+          "name": "Get account for employee",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/accounts/EMP-0005",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "accounts",
+                "EMP-0005"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Create login",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"employeeId\": \"EMP-0005\",\n  \"userTypeId\": 3,\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/accounts",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "accounts"
+              ]
+            },
+            "description": "Leave password empty to generate one. Response includes temporaryPassword (shown once)."
+          },
+          "response": []
+        },
+        {
+          "name": "Update login (type / active)",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userTypeId\": 4,\n  \"isActive\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/accounts/EMP-0005",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "accounts",
+                "EMP-0005"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reset password",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/accounts/EMP-0005/reset-password",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "accounts",
+                "EMP-0005",
+                "reset-password"
+              ]
+            },
+            "description": "Cannot reset your own — use Auth → Change my password."
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Admin: Features & Automations",
+      "description": "",
+      "item": [
+        {
+          "name": "Get feature switches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/features",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "features"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set feature",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/features/performance",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "features",
+                "performance"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Get automations",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/admin/automations",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "automations"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Set automation",
+          "request": {
+            "method": "PUT",
+            "header": [],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/automations/scheduled-to-todo",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "admin",
+                "automations",
+                "1"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}

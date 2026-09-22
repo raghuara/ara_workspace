@@ -87,6 +87,11 @@ export const VIEW_MODES = [
   { value: 'table', label: 'Table' },
 ]
 
+export const LIMITS = {
+  WORKSPACES: 10,
+  GROUPS_PER_WORKSPACE: 15,
+}
+
 export const RECURRENCE = {
   WEEKLY: 'weekly',
   MONTHLY: 'monthly',

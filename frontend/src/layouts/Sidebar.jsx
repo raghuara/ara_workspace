@@ -7,6 +7,7 @@ import logoUrl from '@/assets/logo.png'
 import { WorkspaceNavTree } from './WorkspaceNavTree'
 import { navRowSx, sectionLabelSx, sectionSx } from './navRowSx'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useSession } from '@/hooks/useSession'
 import { useFeatures } from '@/hooks/useFeatures'
 import { colors, layout } from '@/theme/tokens'
 
@@ -33,13 +34,16 @@ const NavItem = ({ item, active, onNavigate }) => (
 
 export const Sidebar = ({ onNavigate }) => {
   const { can, canAny } = usePermissions()
+  const { userType } = useSession()
   const { isEnabled } = useFeatures()
   const { pathname } = useLocation()
 
   const allowed = (permission) => (Array.isArray(permission) ? canAny(permission) : can(permission))
 
   const isVisible = (item) =>
-    (!item.permission || allowed(item.permission)) && (!item.feature || isEnabled(item.feature))
+    !item.hidden &&
+    (!item.permission || allowed(item.permission) || Boolean(item.userTypeIds?.includes(userType?.id))) &&
+    (!item.feature || isEnabled(item.feature))
 
   return (
     <Box

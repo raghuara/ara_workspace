@@ -11,6 +11,7 @@ export const NAVIGATION = [
     icon: LayoutDashboard,
     end: true,
     permission: PERMISSIONS.DASHBOARD_VIEW,
+    userTypeIds: [3],
   },
   {
     key: 'organisation',
@@ -47,6 +48,7 @@ export const NAVIGATION = [
         icon: TrendingUp,
         permission: PERMISSIONS.REVIEW_VIEW,
         feature: FEATURES.PERFORMANCE,
+        hidden: true,
       },
     ],
   },

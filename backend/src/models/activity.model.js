@@ -20,7 +20,7 @@ const ACTIVITY_SELECT = `
   LEFT JOIN clients c ON c.id = t.client_id
 `;
 
-const buildFilters = ({ workspaceIds, workspaceId, search, action, actorId }) => {
+const buildFilters = ({ workspaceIds, workspaceId, search, action, actorId, from, to }) => {
   const clauses = [];
   const params = [];
 
@@ -42,6 +42,10 @@ const buildFilters = ({ workspaceIds, workspaceId, search, action, actorId }) =>
   if (actorId) {
     clauses.push("h.actor_id = ?");
     params.push(actorId);
+  }
+  if (from && to) {
+    clauses.push("h.at >= ? AND h.at < DATE_ADD(?, INTERVAL 1 DAY)");
+    params.push(from, to);
   }
   if (search) {
     const term = `%${search}%`;

@@ -22,6 +22,14 @@ export const taskService = {
 
   getTaskHistory: (taskId) => apiRequest(`/tasks/${id(taskId)}/history`),
 
+  listComments: (taskId) => apiRequest(`/tasks/${id(taskId)}/comments`),
+
+  addComment: (taskId, body) => apiRequest(`/tasks/${id(taskId)}/comments`, { method: 'POST', body: { body } }),
+
+  updateComment: (commentId, body) => apiRequest(`/comments/${id(commentId)}`, { method: 'PUT', body: { body } }),
+
+  deleteComment: (commentId) => apiRequest(`/comments/${id(commentId)}`, { method: 'DELETE' }),
+
   getWorkloadReport: (workspaceId, filters = {}) =>
     apiRequest(`/workspaces/${id(workspaceId)}/workload${toQueryString(filters)}`),
 }

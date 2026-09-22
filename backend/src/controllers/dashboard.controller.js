@@ -1,5 +1,7 @@
 const dashboardModel = require("../models/dashboard.model");
 const workspaceModel = require("../models/workspace.model");
+const access = require("../services/access.service");
+const { periodFrom, belongsToPeriod } = require("../utils/period");
 const { PRIORITIES, USER_TYPE } = require("../constants/workspace");
 
 const PRIORITY_TONES = { Urgent: "rose", High: "amber", Normal: "blue", Low: "gray" };
@@ -259,7 +261,27 @@ const isOrganisationWide = (req) => req.user.userTypeId === USER_TYPE.MASTER_ADM
 const scopedWorkspaceIds = async (req) =>
   isOrganisationWide(req) ? null : workspaceModel.findWorkspaceIdsForEmployee(req.user.employeeId);
 
+const hasPermission = (req, permission) => (req.permissions || []).includes(permission);
+
+const assignedToMe = (req, snapshot) => {
+  const tasks = snapshot.tasks.filter((task) => task.assigneeIds.includes(req.user.employeeId));
+  const ids = new Set(tasks.map((task) => task.id));
+  return { ...snapshot, tasks, correctionMoveTaskIds: snapshot.correctionMoveTaskIds.filter((taskId) => ids.has(taskId)) };
+};
+
+const ownTasksOnly = async (req, snapshot) =>
+  (await access.isOwnTasksOnly(req, snapshot.workspace.id)) ? assignedToMe(req, snapshot) : snapshot;
+
+const withinPeriod = (snapshot, period) => {
+  if (!period.from) return snapshot;
+  const kindById = new Map(snapshot.columns.map((column) => [column.id, column.kind]));
+  const tasks = snapshot.tasks.filter((task) => belongsToPeriod(period, task, kindById.get(task.statusId) === "completed"));
+  const ids = new Set(tasks.map((task) => task.id));
+  return { ...snapshot, tasks, correctionMoveTaskIds: snapshot.correctionMoveTaskIds.filter((taskId) => ids.has(taskId)) };
+};
+
 const getOverview = async (req, res) => {
+  const period = periodFrom(req.query);
   const scope = await scopedWorkspaceIds(req);
   const workspaceIds = scope ?? (await workspaceModel.findAllWorkspaces()).map((row) => row.id);
 
@@ -267,8 +289,9 @@ const getOverview = async (req, res) => {
   const workspaces = [];
   const assignedPeople = new Set();
   for (const workspaceId of workspaceIds) {
-    const snapshot = await dashboardModel.loadWorkspaceSnapshot(workspaceId);
-    if (!snapshot) continue;
+    const loaded = await dashboardModel.loadWorkspaceSnapshot(workspaceId);
+    if (!loaded) continue;
+    const snapshot = withinPeriod(await ownTasksOnly(req, loaded), period);
     workspaces.push(summariseWorkspace(snapshot, directory));
     snapshot.members.forEach((member) => assignedPeople.add(member.employeeId));
   }
@@ -301,11 +324,14 @@ const getOverview = async (req, res) => {
 
 const getScopeSummary = async (req, res) => {
   const { workspaceId } = req.params;
-  const snapshot = await dashboardModel.loadWorkspaceSnapshot(workspaceId);
-  if (!snapshot) return notFound(res, "That workspace does not exist.");
+  const loaded = await dashboardModel.loadWorkspaceSnapshot(workspaceId);
+  if (!loaded) return notFound(res, "That workspace does not exist.");
   if (!isOrganisationWide(req) && !(await workspaceModel.isMember(workspaceId, req.user.employeeId))) {
     return forbidden(res);
   }
+  const personal = !hasPermission(req, "workspace.view");
+  const scoped = personal ? assignedToMe(req, loaded) : await ownTasksOnly(req, loaded);
+  const snapshot = withinPeriod(scoped, periodFrom(req.query));
 
   const directory = await dashboardModel.findEmployeeDirectory();
   const summary = summariseScope(snapshot, directory, {
@@ -313,6 +339,19 @@ const getScopeSummary = async (req, res) => {
     teamId: typeof req.query.teamId === "string" ? req.query.teamId.trim() : ""
   });
   if (summary.error) return notFound(res, summary.error);
+
+  if (personal) {
+    return res.json({
+      ...summary,
+      personal: true,
+      lead: null,
+      admins: [],
+      counts: { members: 0, groups: 0, teams: 0 },
+      members: [],
+      groups: [],
+      teams: []
+    });
+  }
 
   res.json(summary);
 };

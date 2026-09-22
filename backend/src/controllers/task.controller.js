@@ -1,4 +1,5 @@
 const taskModel = require("../models/task.model");
+const commentModel = require("../models/comment.model");
 const workspaceModel = require("../models/workspace.model");
 const { runRecurringTasks } = require("../services/recurring.service");
 const notifications = require("../services/notification.service");
@@ -6,9 +7,12 @@ const access = require("../services/access.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
 const { PRIORITIES, TASK_SIZES, USER_TYPE } = require("../constants/workspace");
+const { periodFrom } = require("../utils/period");
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TABS = ["today", "scheduled", "overdue", "all"];
+const DESCRIPTION_MAX = 5000;
+const COMMENT_MAX = 4000;
 
 const text = (value) => (typeof value === "string" ? value.trim() : "");
 const idList = (value) => (Array.isArray(value) ? [...new Set(value.map(text).filter(Boolean))] : []);
@@ -85,7 +89,12 @@ const loadOne = async (taskId) => {
   const row = await taskModel.findTaskById(taskId);
   if (!row) return null;
   const [task] = await withAssignees([row]);
-  return task;
+  const meta = await taskModel.findDescriptionMeta(task.id);
+  return {
+    ...task,
+    descriptionUpdatedAt: meta?.updated_at ?? null,
+    descriptionUpdatedByName: meta?.updated_by_name ?? null
+  };
 };
 
 const ensureWorkspaceAccess = async (req, res, workspaceId) => {
@@ -117,6 +126,24 @@ const viewOnly = (res) =>
 const cannotAssign = (res) =>
   res.status(403).json({ message: "You do not have permission to assign tasks.", code: "FORBIDDEN" });
 
+const FIELD_PERMISSIONS = {
+  statusId: { permission: "task.move", label: "move tasks between columns" },
+  sizeKey: { permission: "task.weightage.set", label: "change task size" }
+};
+
+const fieldPermission = (field) => FIELD_PERMISSIONS[field] ?? { permission: "task.update", label: "edit tasks" };
+
+const descriptionHistory = (before, after) => {
+  const from = before ?? "";
+  const to = after ?? "";
+  if (!from) return { summary: "added the description", detail: { fields: ["description"], after: to } };
+  if (!to) return { summary: "removed the description", detail: { fields: ["description"], before: from } };
+  return { summary: "edited the description", detail: { fields: ["description"], before: from, after: to } };
+};
+
+const notAllowedTo = (res, label) =>
+  res.status(403).json({ message: `You do not have permission to ${label}.`, code: "FORBIDDEN" });
+
 const filtersFrom = (query) => ({
   search: text(query.search),
   clientId: text(query.clientId),
@@ -125,7 +152,8 @@ const filtersFrom = (query) => ({
   assigneeId: text(query.assigneeId),
   priority: text(query.priority),
   sizeKey: text(query.sizeKey),
-  tab: TABS.includes(query.tab) ? query.tab : "all"
+  tab: TABS.includes(query.tab) ? query.tab : "all",
+  ...periodFrom(query)
 });
 
 const runScheduledAutomation = async (workspaceId) => {
@@ -207,7 +235,7 @@ const validateTaskFields = async (body, workspaceId, existing = null) => {
     if (!changes.title) errors.title = "A task title is required.";
   }
 
-  if (has("description")) changes.description = text(body.description) || null;
+  if (has("description")) changes.description = text(body.description).slice(0, DESCRIPTION_MAX) || null;
 
   if (has("statusId") || !existing) {
     changes.statusId = text(body.statusId);
@@ -279,7 +307,7 @@ const createTask = async (req, res) => {
   const target = { groupId: changes.groupId ?? null, teamId: changes.teamId ?? null, assigneeIds: [] };
   if (!access.canEditTask(scopes, target)) return viewOnly(res);
 
-  const sizeKey = changes.sizeKey ?? "M";
+  const sizeKey = can(req, "task.weightage.set") ? (changes.sizeKey ?? "M") : "M";
   const assigneeIds = can(req, "task.assign") ? (changes.assigneeIds ?? []) : [req.user.employeeId];
 
   const taskId = await withTransaction(async (connection) => {
@@ -304,6 +332,13 @@ const createTask = async (req, res) => {
       },
       connection
     );
+    if (changes.description) {
+      await taskModel.updateTask(
+        id,
+        { descriptionUpdatedAt: new Date(), descriptionUpdatedById: req.user.employeeId },
+        connection
+      );
+    }
     await taskModel.replaceAssignees(id, assigneeIds, connection);
 
     const base = { taskId: id, workspaceId, actorId: req.user.employeeId };
@@ -335,21 +370,44 @@ const updateTask = async (req, res) => {
   if (Object.keys(errors).length > 0) return badRequest(res, "Please fix the highlighted fields.", errors);
 
   const { assigneeIds, ...fieldChanges } = changes;
-  const changedFields = Object.keys(fieldChanges).filter(
-    (field) => field !== "points" && JSON.stringify(fieldChanges[field]) !== JSON.stringify(existing[field] ?? null)
-  );
+  const unchanged = (field) =>
+    field === "description"
+      ? (fieldChanges.description ?? "") === (existing.description ?? "")
+      : JSON.stringify(fieldChanges[field]) === JSON.stringify(existing[field] ?? null);
+  const changedFields = Object.keys(fieldChanges).filter((field) => field !== "points" && !unchanged(field));
   const assigneesChanged =
     assigneeIds !== undefined && JSON.stringify([...assigneeIds].sort()) !== JSON.stringify([...existing.assigneeIds].sort());
   if (assigneesChanged && !can(req, "task.assign")) return cannotAssign(res);
+  const blocked = changedFields.map(fieldPermission).find(({ permission }) => !can(req, permission));
+  if (blocked) return notAllowedTo(res, blocked.label);
+
+  const descriptionChanged = changedFields.includes("description");
+  if (descriptionChanged) {
+    if (await access.isOwnTasksOnly(req, existing.workspaceId)) {
+      return res.status(403).json({
+        message: "Employees can read the description but not change it. Add a comment instead.",
+        code: "FORBIDDEN"
+      });
+    }
+    fieldChanges.descriptionUpdatedAt = new Date();
+    fieldChanges.descriptionUpdatedById = req.user.employeeId;
+  }
+  const otherFields = changedFields.filter((field) => field !== "description");
 
   await withTransaction(async (connection) => {
     if (changedFields.length > 0) await taskModel.updateTask(existing.id, fieldChanges, connection);
     if (assigneesChanged) await taskModel.replaceAssignees(existing.id, assigneeIds, connection);
 
     const base = { taskId: existing.id, workspaceId: existing.workspaceId, actorId: req.user.employeeId };
-    if (changedFields.length > 0) {
+    if (otherFields.length > 0) {
       await taskModel.insertHistory(
-        { ...base, action: "updated", summary: "updated this task", detail: { fields: changedFields } },
+        { ...base, action: "updated", summary: "updated this task", detail: { fields: otherFields } },
+        connection
+      );
+    }
+    if (descriptionChanged) {
+      await taskModel.insertHistory(
+        { ...base, action: "updated", ...descriptionHistory(existing.description, fieldChanges.description) },
         connection
       );
     }
@@ -463,14 +521,236 @@ const getTaskHistory = async (req, res) => {
   );
 };
 
+const excerpt = (value, length) => {
+  const flat = value.replace(/\s+/g, " ");
+  return flat.length > length ? `${flat.slice(0, length - 1)}…` : flat;
+};
+
+const mapComment = (row) => ({
+  id: row.id,
+  taskId: row.task_id,
+  authorId: row.author_id,
+  authorName: row.author_name ?? "Former member",
+  authorTypeId: row.author_type_id,
+  authorTypeName: row.author_type_name ?? null,
+  body: row.body,
+  createdAt: row.created_at,
+  editedAt: row.edited_at
+});
+
+const commentBodyFrom = (res, body) => {
+  const value = text(body?.body);
+  if (!value) {
+    badRequest(res, "Write something before sending.", { body: "A comment cannot be empty." });
+    return null;
+  }
+  if (value.length > COMMENT_MAX) {
+    badRequest(res, `Comments can be up to ${COMMENT_MAX} characters.`, { body: "This comment is too long." });
+    return null;
+  }
+  return value;
+};
+
+const loadReadableTask = async (req, res, taskId) => {
+  const task = await loadOne(taskId);
+  if (!task) {
+    notFound(res);
+    return null;
+  }
+  if (!(await ensureWorkspaceAccess(req, res, task.workspaceId))) return null;
+  if (!(await canAccessTask(req, task))) {
+    outsideScope(res);
+    return null;
+  }
+  return task;
+};
+
+const loadCommentContext = async (req, res) => {
+  const comment = await commentModel.findCommentById(req.params.commentId);
+  if (!comment) {
+    notFound(res, "That comment could not be found.");
+    return {};
+  }
+  const task = await loadReadableTask(req, res, comment.task_id);
+  return task ? { comment, task } : {};
+};
+
+const listComments = async (req, res) => {
+  const task = await loadReadableTask(req, res, req.params.taskId);
+  if (!task) return;
+
+  res.json((await commentModel.findComments(task.id)).map(mapComment));
+};
+
+const createComment = async (req, res) => {
+  const task = await loadReadableTask(req, res, req.params.taskId);
+  if (!task) return;
+  const body = commentBodyFrom(res, req.body);
+  if (!body) return;
+
+  const commentId = await withTransaction(async (connection) => {
+    const id = await commentModel.insertComment(
+      {
+        taskId: task.id,
+        workspaceId: task.workspaceId,
+        authorId: req.user.employeeId ?? null,
+        authorTypeId: req.user.userTypeId ?? null,
+        body,
+        createdAt: new Date()
+      },
+      connection
+    );
+    await taskModel.insertHistory(
+      {
+        taskId: task.id,
+        workspaceId: task.workspaceId,
+        actorId: req.user.employeeId,
+        action: "commented",
+        summary: "commented",
+        detail: { excerpt: excerpt(body, 140) }
+      },
+      connection
+    );
+    await notifications.taskCommented(
+      {
+        task: { id: task.id, workspaceId: task.workspaceId, title: task.title, createdById: task.createdById },
+        assigneeIds: task.assigneeIds,
+        actorId: req.user.employeeId,
+        excerpt: excerpt(body, 80)
+      },
+      connection
+    );
+    return id;
+  });
+
+  res.status(201).json(mapComment(await commentModel.findCommentById(commentId)));
+};
+
+const updateComment = async (req, res) => {
+  const { comment, task } = await loadCommentContext(req, res);
+  if (!comment) return;
+  if (comment.author_id !== req.user.employeeId) {
+    return res.status(403).json({ message: "You can only edit your own comments.", code: "FORBIDDEN" });
+  }
+  const body = commentBodyFrom(res, req.body);
+  if (!body) return;
+
+  if (body !== comment.body) {
+    await withTransaction(async (connection) => {
+      await commentModel.updateComment(comment.id, body, new Date(), connection);
+      await taskModel.insertHistory(
+        {
+          taskId: task.id,
+          workspaceId: task.workspaceId,
+          actorId: req.user.employeeId,
+          action: "commented",
+          summary: "edited a comment",
+          detail: { before: comment.body, after: body }
+        },
+        connection
+      );
+    });
+  }
+  res.json(mapComment(await commentModel.findCommentById(comment.id)));
+};
+
+const deleteComment = async (req, res) => {
+  const { comment, task } = await loadCommentContext(req, res);
+  if (!comment) return;
+  const own = comment.author_id === req.user.employeeId;
+  if (!own && !(await access.resolveScopes(req, task.workspaceId)).admin) {
+    return res.status(403).json({ message: "Only the author or an admin can delete this comment.", code: "FORBIDDEN" });
+  }
+
+  await withTransaction(async (connection) => {
+    await commentModel.deleteComment(comment, connection);
+    await taskModel.insertHistory(
+      {
+        taskId: task.id,
+        workspaceId: task.workspaceId,
+        actorId: req.user.employeeId,
+        action: "commented",
+        summary: own ? "deleted a comment" : `deleted a comment by ${comment.author_name ?? "a former member"}`,
+        detail: { before: comment.body }
+      },
+      connection
+    );
+  });
+  res.json({ id: comment.id });
+};
+
+const monthsBetween = (from, to) => {
+  const months = [];
+  let [year, month] = from.slice(0, 7).split("-").map(Number);
+  const [endYear, endMonth] = to.slice(0, 7).split("-").map(Number);
+  while ((year < endYear || (year === endYear && month <= endMonth)) && months.length < 60) {
+    months.push(`${year}-${String(month).padStart(2, "0")}`);
+    month += 1;
+    if (month > 12) {
+      month = 1;
+      year += 1;
+    }
+  }
+  return months;
+};
+
 const getWorkloadReport = async (req, res) => {
   const { workspaceId } = req.params;
   if (!(await ensureWorkspaceAccess(req, res, workspaceId))) return;
 
+  const from = isValidDate(text(req.query.from)) ? text(req.query.from) : null;
+  const to = isValidDate(text(req.query.to)) ? text(req.query.to) : null;
+  if (from && to && from > to) return badRequest(res, "The start date must be on or before the end date.");
+
+  const completedOn = (task) => task.completedAt ?? task.dueDate ?? task.createdAt;
+  const inPeriod = (task) => {
+    const day = completedOn(task);
+    return Boolean(day) && (!from || day >= from) && (!to || day <= to);
+  };
+
   const tasks = await loadVisibleTasks(req, workspaceId, { ...filtersFrom(req.query), tab: "all" });
 
+  const months = from && to ? monthsBetween(from, to) : [];
+  const byMonth = new Map(months.map((month) => [month, { month, completedTasks: 0, completedPoints: 0 }]));
+
   const byPerson = new Map();
+  const byTeam = new Map();
+  const tally = (row, task, completed) => {
+    if (completed) {
+      row.completedTasks += 1;
+      row.completedPoints += task.points;
+    } else {
+      row.openTasks += 1;
+      row.openPoints += task.points;
+    }
+  };
+  const emptyTally = () => ({ openTasks: 0, completedTasks: 0, openPoints: 0, completedPoints: 0 });
+
   tasks.forEach((task) => {
+    const completed = task.statusKind === "completed";
+    if (completed && !inPeriod(task)) return;
+
+    const teamKey = task.teamId ?? "none";
+    if (!byTeam.has(teamKey)) {
+      byTeam.set(teamKey, {
+        teamId: task.teamId ?? null,
+        name: task.teamId ? task.teamName : "Not in a team",
+        groupId: task.teamId ? task.groupId : null,
+        groupName: task.teamId ? task.groupName : null,
+        groupTone: task.teamId ? task.groupTone : "slate",
+        ...emptyTally(),
+        members: new Map()
+      });
+    }
+    const team = byTeam.get(teamKey);
+    tally(team, task, completed);
+    task.assignees.forEach((assignee) => {
+      if (!team.members.has(assignee.id)) {
+        team.members.set(assignee.id, { employeeId: assignee.id, fullName: assignee.fullName, ...emptyTally() });
+      }
+      tally(team.members.get(assignee.id), task, completed);
+    });
+
     task.assignees.forEach((assignee) => {
       if (!byPerson.has(assignee.id)) {
         byPerson.set(assignee.id, {
@@ -483,9 +763,14 @@ const getWorkloadReport = async (req, res) => {
         });
       }
       const row = byPerson.get(assignee.id);
-      if (task.statusKind === "completed") {
+      if (completed) {
         row.completedTasks += 1;
         row.completedPoints += task.points;
+        const bucket = byMonth.get(completedOn(task).slice(0, 7));
+        if (bucket) {
+          bucket.completedTasks += 1;
+          bucket.completedPoints += task.points;
+        }
       } else {
         row.openTasks += 1;
         row.openPoints += task.points;
@@ -509,6 +794,7 @@ const getWorkloadReport = async (req, res) => {
   const totalCompletedTasks = rows.reduce((sum, row) => sum + row.completedTasks, 0);
 
   res.json({
+    period: { from, to },
     rows: rows
       .map((row) => ({
         ...row,
@@ -516,6 +802,19 @@ const getWorkloadReport = async (req, res) => {
         taskShare: totalCompletedTasks > 0 ? Number(((row.completedTasks / totalCompletedTasks) * 100).toFixed(1)) : 0
       }))
       .sort((a, b) => b.completedPoints - a.completedPoints),
+    byMonth: [...byMonth.values()],
+    byTeam: [...byTeam.values()]
+      .map((team) => ({
+        ...team,
+        members: [...team.members.values()]
+          .map((member) => ({
+            ...member,
+            designation: designations.get(member.employeeId) ?? "—",
+            averagePoints: member.completedTasks > 0 ? Number((member.completedPoints / member.completedTasks).toFixed(1)) : 0
+          }))
+          .sort((a, b) => b.completedPoints - a.completedPoints || b.completedTasks - a.completedTasks)
+      }))
+      .sort((a, b) => b.completedPoints - a.completedPoints || b.completedTasks - a.completedTasks),
     totalCompletedPoints,
     totalCompletedTasks
   });
@@ -530,5 +829,9 @@ module.exports = {
   moveTask,
   deleteTask,
   getTaskHistory,
+  listComments,
+  createComment,
+  updateComment,
+  deleteComment,
   getWorkloadReport
 };

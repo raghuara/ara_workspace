@@ -36,11 +36,12 @@ const pop = keyframes`
 
 const stop = (event) => event.stopPropagation()
 
-const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, children }) => (
+const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, readOnly = false, children }) => (
   <Box
-    component="button"
-    type="button"
-    onClick={onClick}
+    component={readOnly ? 'div' : 'button'}
+    type={readOnly ? undefined : 'button'}
+    onClick={readOnly ? undefined : onClick}
+    aria-disabled={readOnly || undefined}
     sx={{
       display: 'flex',
       alignItems: 'center',
@@ -51,11 +52,11 @@ const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, child
       borderRadius: 1.5,
       border: 0,
       bgcolor: 'transparent',
-      cursor: 'pointer',
+      cursor: readOnly ? 'default' : 'pointer',
       textAlign: 'left',
       font: 'inherit',
       color: filled ? colors.textPrimary : colors.textSecondary,
-      '&:hover': { bgcolor: colors.neutralSoft },
+      '&:hover': readOnly ? {} : { bgcolor: colors.neutralSoft },
       '&:focus-visible': { outline: 'none', boxShadow: `inset 0 0 0 2px ${colors.brand}` },
     }}
   >
@@ -87,6 +88,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
   const { isEnabled } = useFeatures()
   const { can } = usePermissions()
   const canAssign = can(PERMISSIONS.TASK_ASSIGN)
+  const canSize = can(PERMISSIONS.TASK_WEIGHTAGE_SET)
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
   const scheduled = column.kind === 'scheduled'
   const isEditing = Boolean(task)
@@ -160,8 +162,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
         teamId: values.teamId || null,
         ...(canAssign ? { assigneeIds: values.assigneeIds } : {}),
         priority: values.priority,
-        sizeKey: values.sizeKey,
-        points: size.points,
+        ...(canSize ? { sizeKey: values.sizeKey, points: size.points } : {}),
         dueDate: values.dueDate || toIsoDate(new Date()),
         scheduledDate: scheduled ? values.dueDate || daysFromNow(1) : null,
       }
@@ -318,7 +319,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
         ) : null}
 
         {weightageOn ? (
-          <QuickRow icon={Gauge} label="Add size" filled onClick={openMenu('size')}>
+          <QuickRow icon={Gauge} label="Add size" filled readOnly={!canSize} onClick={openMenu('size')}>
             <Typography variant="body2">
               {size.label} · {size.points} pts
             </Typography>

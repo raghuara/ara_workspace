@@ -1,4 +1,5 @@
 const pool = require("../config/database");
+const { isOngoing } = require("../utils/period");
 
 const TASK_SELECT = `
   SELECT
@@ -83,6 +84,17 @@ const buildFilters = ({ workspaceId, visibility, filters }) => {
     clauses.push("sc.kind <> 'completed' AND t.due_date IS NOT NULL AND t.due_date < CURDATE()");
   }
 
+  if (filters.from && filters.to) {
+    clauses.push(
+      isOngoing(filters)
+        ? "(sc.kind <> 'completed' OR COALESCE(t.completed_at, t.due_date, t.created_at) BETWEEN ? AND ?)"
+        : `(CASE WHEN sc.kind = 'completed'
+             THEN COALESCE(t.completed_at, t.due_date, t.created_at)
+             ELSE COALESCE(t.due_date, t.created_at) END) BETWEEN ? AND ?`
+    );
+    params.push(filters.from, filters.to);
+  }
+
   return { where: `WHERE ${clauses.join(" AND ")}`, params };
 };
 
@@ -165,7 +177,9 @@ const COLUMN_FOR_FIELD = {
   dueDate: "due_date",
   scheduledDate: "scheduled_date",
   completedAt: "completed_at",
-  completedById: "completed_by_id"
+  completedById: "completed_by_id",
+  descriptionUpdatedAt: "description_updated_at",
+  descriptionUpdatedById: "description_updated_by_id"
 };
 
 const updateTask = async (taskId, changes, connection = pool) => {
@@ -211,6 +225,17 @@ const findHistory = async (taskId) => {
     [taskId]
   );
   return rows;
+};
+
+const findDescriptionMeta = async (taskId) => {
+  const [rows] = await pool.query(
+    `SELECT t.description_updated_at AS updated_at, CONCAT(e.first_name, ' ', e.last_name) AS updated_by_name
+     FROM tasks t
+     LEFT JOIN employees e ON e.employee_id = t.description_updated_by_id
+     WHERE t.id = ? LIMIT 1`,
+    [taskId]
+  );
+  return rows[0] ?? null;
 };
 
 const findAutomationRules = async () => {
@@ -265,6 +290,7 @@ module.exports = {
   deleteTask,
   insertHistory,
   findHistory,
+  findDescriptionMeta,
   findAutomationRules,
   findDueScheduledTasks,
   moveTasksToColumn,

@@ -17,7 +17,8 @@ const EMPLOYEE_SELECT = `
     e.employment_type,
     e.work_location,
     e.reporting_manager_id,
-    CONCAT(m.first_name, ' ', m.last_name) AS reporting_manager
+    CONCAT(m.first_name, ' ', m.last_name) AS reporting_manager,
+    (SELECT u.user_type_id FROM users u WHERE u.employee_id = e.employee_id LIMIT 1) AS login_user_type_id
   FROM employees e
   LEFT JOIN employees m ON m.employee_id = e.reporting_manager_id
   LEFT JOIN workspaces w ON w.id = e.workspace_id

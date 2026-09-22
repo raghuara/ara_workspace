@@ -20,6 +20,7 @@ export const PeoplePicker = ({
   required,
   disabled,
   autoFocus,
+  disabledReason,
 }) => {
   const byId = new Map(options.map((option) => [option.id, option]))
   const selected = multiple
@@ -35,6 +36,7 @@ export const PeoplePicker = ({
       disabled={disabled}
       onChange={(_, next) => onChange(multiple ? next.map((option) => option.id) : (next?.id ?? ''))}
       getOptionLabel={(option) => option.fullName}
+      getOptionDisabled={disabledReason ? (option) => Boolean(disabledReason(option)) : undefined}
       isOptionEqualToValue={(option, candidate) => option.id === candidate.id}
       filterOptions={(candidates, state) => {
         const needle = state.inputValue.trim().toLowerCase()
@@ -53,9 +55,10 @@ export const PeoplePicker = ({
                 {option.fullName}
               </Typography>
               <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
-                {[option.employeeId, option.department, option.designation, option.workspaceName]
-                  .filter(Boolean)
-                  .join(' · ')}
+                {disabledReason?.(option) ??
+                  [option.employeeId, option.department, option.designation, option.workspaceName]
+                    .filter(Boolean)
+                    .join(' · ')}
               </Typography>
             </Box>
             {!multiple && isSelected ? (

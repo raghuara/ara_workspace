@@ -28,13 +28,18 @@ const assignableUserTypes = (req, userTypes) => {
   );
 };
 
+const isOwnTasksOnly = async (req, workspaceId) =>
+  req.user.userTypeId === USER_TYPE.EMPLOYEE && !(await accessModel.isWorkspaceAdmin(workspaceId, req.user.employeeId));
+
 const resolveScopes = async (req, workspaceId) => {
   if (req.user.userTypeId === USER_TYPE.MASTER_ADMIN || (await accessModel.isWorkspaceAdmin(workspaceId, req.user.employeeId))) {
     return { admin: true, workspace: "edit", groups: new Map(), teams: new Map(), employeeId: req.user.employeeId };
   }
 
-  const grants = await accessModel.findGrants(workspaceId, req.user.employeeId);
   const scopes = { admin: false, workspace: "none", groups: new Map(), teams: new Map(), employeeId: req.user.employeeId };
+  if (req.user.userTypeId === USER_TYPE.EMPLOYEE) return scopes;
+
+  const grants = await accessModel.findGrants(workspaceId, req.user.employeeId);
   grants.forEach((grant) => {
     if (grant.scope_type === "workspace") scopes.workspace = grant.level;
     if (grant.scope_type === "group") scopes.groups.set(grant.scope_id, grant.level);
@@ -85,6 +90,7 @@ module.exports = {
   allowedWorkspaceIds,
   inScope,
   assignableUserTypes,
+  isOwnTasksOnly,
   resolveScopes,
   levelForTask,
   canEditTask,

@@ -14,6 +14,7 @@ import { ROUTES, workspaceViewPath } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSession } from '@/hooks/useSession'
+import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { formatLongDate, toIsoDate } from '@/utils/date'
 import { RecentActivityTable } from './RecentActivityTable'
@@ -29,7 +30,8 @@ export const MasterAdminDashboard = () => {
   const { can } = usePermissions()
   const { activeWorkspaceId, selectWorkspace } = useWorkspace()
 
-  const overview = useAsync(dashboardService.getOverview, [])
+  const { yearRange, yearLabel } = usePeriod()
+  const overview = useAsync(dashboardService.getOverview, [yearRange])
   const totals = overview.data?.totals
   const workspaces = overview.data?.workspaces ?? []
 
@@ -75,7 +77,7 @@ export const MasterAdminDashboard = () => {
     <Box>
       <PageHeader
         title={`Good day, ${user?.name?.split(' ')[0] ?? 'there'}`}
-        description={`${formatLongDate(toIsoDate(new Date()))} · Every workspace in the organisation, side by side.`}
+        description={`${formatLongDate(toIsoDate(new Date()))} · FY ${yearLabel} · Every workspace in the organisation, side by side.`}
         actions={
           can(PERMISSIONS.WORKSPACE_CREATE) ? (
             <Button component={Link} to={ROUTES.adminWorkspaces} variant="outlined" size="small">
@@ -92,6 +94,7 @@ export const MasterAdminDashboard = () => {
           <EmptyState icon={Building2} title="No workspaces yet" description="Create one under Administration → Workspaces." />
         ) : (
           <Stack spacing={GAP}>
+             
             <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'repeat(2, 1fr)', md: 'repeat(3, 1fr)', xl: 'repeat(6, 1fr)' } }}>
               <StatCard label="Workspaces" value={totals.workspaces} icon={Building2} tone="blue" helperText={`${workspaces.reduce((sum, workspace) => sum + workspace.groups, 0)} groups · ${allTeams.length} teams`} />
               <StatCard
@@ -174,7 +177,7 @@ export const MasterAdminDashboard = () => {
                 description="Every team across the organisation · corrections and overdue highlighted"
               />
 
-              <RecentActivityTable workspaceId={activeWorkspaceId} canView={can(PERMISSIONS.ACTIVITY_VIEW)} />
+              <RecentActivityTable workspaceId={activeWorkspaceId} range={yearRange} canView={can(PERMISSIONS.ACTIVITY_VIEW)} />
             </Box>
           </Stack>
         )}

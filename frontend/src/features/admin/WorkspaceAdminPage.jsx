@@ -23,6 +23,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { PeoplePicker } from '@/components/PeoplePicker'
+import { LIMITS } from '@/constants/workspaceDomain'
 import { TonePicker } from '@/components/TonePicker'
 import { MemberAccessDialog } from './MemberAccessDialog'
 import { workspaceService } from '@/api/workspaceService'
@@ -32,6 +33,22 @@ import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
+import { DEFAULT_FISCAL_START, MONTH_NAMES, endMonthOf } from '@/utils/fiscalYear'
+
+const FISCAL_START_OPTIONS = MONTH_NAMES.map((name, index) => ({
+  value: index + 1,
+  label: name,
+  secondary: `Year runs ${name} – ${MONTH_NAMES[endMonthOf(index + 1) - 1]}`,
+}))
+
+const fiscalStartField = (initial) => ({
+  name: 'fiscalYearStartMonth',
+  label: 'Financial year starts in',
+  options: FISCAL_START_OPTIONS,
+  initial,
+  required: true,
+  helperText: 'Reports and the year picker in the header follow this. The year always runs 12 months.',
+})
 
 const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => {
   const [values, setValues] = useState(() =>
@@ -94,6 +111,7 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
                   onChange={(next) => setValues((c) => ({ ...c, [field.name]: next }))}
                   required={field.required}
                   helperText={field.helperText}
+                  disabledReason={field.disabledReason}
                 />
               ) : (
                 <TextField
@@ -153,6 +171,11 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
   )
 }
 
+const EMPLOYEE_TYPE_ID = 3
+
+const employeeCannotAdmin = (option) =>
+  option.loginUserTypeId === EMPLOYEE_TYPE_ID ? 'Employee login — change their user type in Access › Accounts to make them an admin' : null
+
 export const WorkspaceAdminPage = () => {
   const { can } = usePermissions()
   const {
@@ -166,6 +189,8 @@ export const WorkspaceAdminPage = () => {
     selectWorkspace,
   } = useWorkspace()
   const [accessMember, setAccessMember] = useState(null)
+  const workspaceLimitReached = workspaces.length >= LIMITS.WORKSPACES
+  const groupLimitReached = groups.length >= LIMITS.GROUPS_PER_WORKSPACE
 
   const summariseAccess = (member) => {
     const grants = member.grants ?? { workspace: null, groups: {}, teams: {} }
@@ -213,6 +238,7 @@ export const WorkspaceAdminPage = () => {
         },
         { name: 'description', label: 'Description', multiline: true, initial: workspace.description ?? '' },
         { name: 'tone', label: 'Colour', tone: true, initial: workspace.tone },
+        fiscalStartField(workspace.fiscalYearStartMonth ?? DEFAULT_FISCAL_START),
         {
           name: 'adminIds',
           label: 'Workspace admins',
@@ -221,6 +247,7 @@ export const WorkspaceAdminPage = () => {
           required: true,
           initial: workspace.adminIds ?? [],
           helperText: 'Admins see everything in this workspace. Keep at least one.',
+          disabledReason: employeeCannotAdmin,
         },
       ],
       onSubmit: async (values) => {
@@ -250,42 +277,55 @@ export const WorkspaceAdminPage = () => {
         breadcrumbs={[{ label: 'Administration' }, { label: 'Setup' }, { label: 'Workspaces' }]}
         actions={
           can(PERMISSIONS.WORKSPACE_CREATE) ? (
-            <Button
-              variant="contained"
-              startIcon={<Plus size={16} strokeWidth={2} />}
-              onClick={() =>
-                setDialog({
-                  title: 'New workspace',
-                  submitLabel: 'Create workspace',
-                  fields: [
-                    { name: 'name', label: 'Workspace name', required: true },
-                    {
-                      name: 'shortName',
-                      label: 'Short code',
-                      helperText: 'Two or three letters shown on the switcher.',
-                    },
-                    { name: 'description', label: 'Description', multiline: true },
-                    { name: 'tone', label: 'Colour', tone: true, initial: 'blue' },
-                    {
-                      name: 'adminId',
-                      label: 'Workspace admin',
-                      people: everyoneOptions,
-                      helperText:
-                        'Pick yourself to start, then onboard the real admin inside the new workspace and hand it over.',
-                    },
-                  ],
-                  onSubmit: async (values) => {
-                    await workspaceService.createWorkspace({
-                      ...values,
-                      adminIds: values.adminId ? [values.adminId] : [],
-                    })
-                    await refreshWorkspaces()
-                  },
-                })
+            <Tooltip
+              title={
+                workspaceLimitReached
+                  ? `You've reached the limit of ${LIMITS.WORKSPACES} workspaces. Delete one you no longer use to add another.`
+                  : `${workspaces.length} of ${LIMITS.WORKSPACES} workspaces used`
               }
             >
-              New workspace
-            </Button>
+              <span>
+              <Button
+                variant="contained"
+                disabled={workspaceLimitReached}
+                startIcon={<Plus size={16} strokeWidth={2} />}
+                onClick={() =>
+                  setDialog({
+                    title: 'New workspace',
+                    submitLabel: 'Create workspace',
+                    fields: [
+                      { name: 'name', label: 'Workspace name', required: true },
+                      {
+                        name: 'shortName',
+                        label: 'Short code',
+                        helperText: 'Two or three letters shown on the switcher.',
+                      },
+                      { name: 'description', label: 'Description', multiline: true },
+                      { name: 'tone', label: 'Colour', tone: true, initial: 'blue' },
+                      fiscalStartField(DEFAULT_FISCAL_START),
+                      {
+                        name: 'adminId',
+                        label: 'Workspace admin',
+                        people: everyoneOptions,
+                        disabledReason: employeeCannotAdmin,
+                        helperText:
+                          'Pick yourself to start, then onboard the real admin inside the new workspace and hand it over.',
+                      },
+                    ],
+                    onSubmit: async (values) => {
+                      await workspaceService.createWorkspace({
+                        ...values,
+                        adminIds: values.adminId ? [values.adminId] : [],
+                      })
+                      await refreshWorkspaces()
+                    },
+                  })
+                }
+              >
+                New workspace
+              </Button>
+              </span>
+            </Tooltip>
           ) : null
         }
       />
@@ -351,28 +391,39 @@ export const WorkspaceAdminPage = () => {
         description="Groups are departments. Teams sit inside a group and have their own lead."
         action={
           can(PERMISSIONS.GROUP_MANAGE) ? (
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<Plus size={15} strokeWidth={2} />}
-              onClick={() =>
-                setDialog({
-                  title: 'New group',
-                  submitLabel: 'Create group',
-                  fields: [
-                    { name: 'name', label: 'Group name', required: true },
-                    { name: 'tone', label: 'Colour', tone: true, initial: 'blue' },
-                    { name: 'leadId', label: 'Group lead', people: peopleOptions },
-                  ],
-                  onSubmit: async (values) => {
-                    await workspaceService.createGroup(activeWorkspaceId, values)
-                    await refreshStructure()
-                  },
-                })
+            <Tooltip
+              title={
+                groupLimitReached
+                  ? `This workspace has the maximum of ${LIMITS.GROUPS_PER_WORKSPACE} groups. Remove or merge one to add another.`
+                  : `${groups.length} of ${LIMITS.GROUPS_PER_WORKSPACE} groups used`
               }
             >
-              Add group
-            </Button>
+              <span>
+              <Button
+                size="small"
+                variant="outlined"
+                disabled={groupLimitReached}
+                startIcon={<Plus size={15} strokeWidth={2} />}
+                onClick={() =>
+                  setDialog({
+                    title: 'New group',
+                    submitLabel: 'Create group',
+                    fields: [
+                      { name: 'name', label: 'Group name', required: true },
+                      { name: 'tone', label: 'Colour', tone: true, initial: 'blue' },
+                      { name: 'leadId', label: 'Group lead', people: peopleOptions },
+                    ],
+                    onSubmit: async (values) => {
+                      await workspaceService.createGroup(activeWorkspaceId, values)
+                      await refreshStructure()
+                    },
+                  })
+                }
+              >
+                Add group
+              </Button>
+              </span>
+            </Tooltip>
           ) : null
         }
       >

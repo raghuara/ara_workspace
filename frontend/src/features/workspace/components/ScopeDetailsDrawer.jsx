@@ -11,6 +11,7 @@ import { FEATURES } from '@/constants/features'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useFeatures } from '@/hooks/useFeatures'
+import { usePeriod } from '@/hooks/usePeriod'
 import { colors } from '@/theme/tokens'
 import { formatDate } from '@/utils/date'
 import { getInitials } from '@/utils/format'
@@ -141,7 +142,8 @@ export const ScopeDetailsDrawer = ({ workspaceId, scope, onClose, onOpenBoard })
   const [cursor, setCursor] = useState({ groupId: scope.groupId ?? '', teamId: scope.teamId ?? '' })
   const [trail, setTrail] = useState([])
 
-  const summary = useAsync(dashboardService.getScopeSummary, [workspaceId, cursor])
+  const { range, periodLabel } = usePeriod()
+  const summary = useAsync(dashboardService.getScopeSummary, [workspaceId, { ...cursor, ...range }])
   const data = summary.data
   const showPoints = isEnabled(FEATURES.WEIGHTAGE)
 
@@ -198,6 +200,7 @@ export const ScopeDetailsDrawer = ({ workspaceId, scope, onClose, onOpenBoard })
               {data?.name ?? 'Loading…'}
             </Typography>
             {data ? <ToneChip label={SCOPE_LABEL[data.scope]} tone={data.tone} /> : null}
+            <ToneChip label={periodLabel} tone="blue" />
           </Stack>
           <Typography variant="caption" component="p" noWrap>
             {data?.subtitle ?? ''}
