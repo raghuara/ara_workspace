@@ -331,7 +331,7 @@ const createGroup = async (req, res) => {
       userTypeId: USER_TYPE.TEAM_LEAD,
       groupId: id
     });
-    await accessModel.upsertGrant({ workspaceId: workspace.id, employeeId: leadId, scopeType: "group", scopeId: id, level: "edit" });
+    await accessModel.grantIfMissing({ workspaceId: workspace.id, employeeId: leadId, scopeType: "group", scopeId: id, level: "edit" });
   }
 
   res.status(201).json(mapGroup(await workspaceModel.findGroupById(id)));
@@ -359,7 +359,7 @@ const updateGroup = async (req, res) => {
       userTypeId: USER_TYPE.TEAM_LEAD,
       groupId: group.id
     });
-    await accessModel.upsertGrant({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "group", scopeId: group.id, level: "edit" });
+    await accessModel.grantIfMissing({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "group", scopeId: group.id, level: "edit" });
   }
 
   res.json(mapGroup(await workspaceModel.findGroupById(group.id)));
@@ -401,21 +401,25 @@ const saveTeam = async (req, res, { group, existing }) => {
       await workspaceModel.insertTeam({ id, groupId: group.id, name, leadId }, connection);
     }
 
-    await workspaceModel.replaceTeamMembers(id, memberIds, connection);
+    await workspaceModel.replaceTeamMembers(
+      id,
+      [...new Set([...memberIds, ...(leadId ? [leadId] : [])])],
+      connection
+    );
 
     if (leadId) {
       await workspaceModel.upsertMember(
         { workspaceId: group.workspace_id, employeeId: leadId, userTypeId: USER_TYPE.TEAM_LEAD, groupId: group.id, teamId: id },
         connection
       );
-      await accessModel.upsertGrant({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "team", scopeId: id, level: "edit" }, connection);
+      await accessModel.grantIfMissing({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "team", scopeId: id, level: "edit" }, connection);
     }
     for (const employeeId of memberIds) {
       await workspaceModel.upsertMember(
         { workspaceId: group.workspace_id, employeeId, userTypeId: USER_TYPE.EMPLOYEE, groupId: group.id, teamId: id },
         connection
       );
-      await accessModel.upsertGrant({ workspaceId: group.workspace_id, employeeId, scopeType: "team", scopeId: id, level: "edit" }, connection);
+      await accessModel.grantIfMissing({ workspaceId: group.workspace_id, employeeId, scopeType: "team", scopeId: id, level: "edit" }, connection);
     }
 
     return id;

@@ -41,7 +41,7 @@ export const WorkspaceSwitcher = () => {
 
   if (!activeWorkspace) return null
   const open = Boolean(anchor)
-  const single = workspaces.length <= 1
+  const single = workspaces.length <= 1 || !can(PERMISSIONS.WORKSPACE_CREATE)
   const canManage = can(PERMISSIONS.WORKSPACE_VIEW)
 
   return (

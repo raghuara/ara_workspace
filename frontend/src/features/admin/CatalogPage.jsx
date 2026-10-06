@@ -175,13 +175,18 @@ export const CatalogPage = ({ config }) => {
         breadcrumbs={[{ label: 'Administration' }, { label: 'Setup' }, { label: config.plural }]}
         actions={
           canManage ? (
-            <Button
-              variant="contained"
-              startIcon={<Plus size={16} strokeWidth={2} aria-hidden="true" />}
-              onClick={() => setDialog({ item: null })}
-            >
-              New {config.singular.toLowerCase()}
-            </Button>
+            <Tooltip title={activeWorkspaceId ? '' : 'Create a workspace first'}>
+              <span>
+                <Button
+                  variant="contained"
+                  disabled={!activeWorkspaceId}
+                  startIcon={<Plus size={16} strokeWidth={2} aria-hidden="true" />}
+                  onClick={() => setDialog({ item: null })}
+                >
+                  New {config.singular.toLowerCase()}
+                </Button>
+              </span>
+            </Tooltip>
           ) : null
         }
       />
@@ -270,7 +275,13 @@ export const CatalogPage = ({ config }) => {
       </SectionCard>
 
       {dialog ? (
-        <CatalogDialog config={config} item={dialog.item} onClose={() => setDialog(null)} onSaved={reload} />
+        <CatalogDialog
+          config={config}
+          item={dialog.item}
+          workspaceId={activeWorkspaceId}
+          onClose={() => setDialog(null)}
+          onSaved={reload}
+        />
       ) : null}
 
       <ConfirmDialog

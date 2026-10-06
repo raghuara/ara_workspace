@@ -11,12 +11,13 @@ import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useSession } from '@/hooks/useSession'
 import { colors } from '@/theme/tokens'
+import { listRowSx } from '@/theme/rowSx'
 
 const ToggleRow = ({ title, description, checked, disabled, lockedReason, onChange }) => (
   <Stack
     direction="row"
     spacing={2}
-    sx={{ alignItems: 'flex-start', py: 1.5, borderBottom: `1px solid ${colors.border}`, '&:last-of-type': { borderBottom: 0 } }}
+    sx={{ alignItems: 'flex-start', px: 1, py: 1.5, borderRadius: 1, ...listRowSx }}
   >
     <Box sx={{ flex: 1, minWidth: 0 }}>
       <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center' }}>

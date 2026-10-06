@@ -15,9 +15,23 @@ import {
   Typography,
 } from '@mui/material'
 import { keyframes } from '@mui/material/styles'
-import { CalendarDays, Check, CornerDownLeft, Flag, Gauge, Layers, Tag, UserRound, UsersRound, X } from 'lucide-react'
+import {
+  AlignLeft,
+  CalendarDays,
+  Check,
+  CornerDownLeft,
+  Flag,
+  Gauge,
+  ImagePlus,
+  Layers,
+  Tag,
+  UserRound,
+  UsersRound,
+  X,
+} from 'lucide-react'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
+import { attachmentService } from '@/api/attachmentService'
 import { taskService } from '@/api/taskService'
 import { PRIORITIES, PRIORITY_TONES, STATUS_TONES, TASK_SIZES, sizeByKey } from '@/constants/workspaceDomain'
 import { FEATURES } from '@/constants/features'
@@ -26,6 +40,7 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { PERMISSIONS } from '@/constants/permissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { useAccess } from '@/hooks/useAccess'
+import { useSession } from '@/hooks/useSession'
 import { colors } from '@/theme/tokens'
 import { daysFromNow, formatRelativeDay, toIsoDate } from '@/utils/date'
 
@@ -35,6 +50,8 @@ const pop = keyframes`
 `
 
 const stop = (event) => event.stopPropagation()
+
+const EMPLOYEE_TYPE_ID = 3
 
 const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, readOnly = false, children }) => (
   <Box
@@ -83,12 +100,15 @@ const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, readO
 
 export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamId, onCancel, onCreated, onSaved }) => {
   const { activeWorkspaceId, clients, assignableMembers } = useWorkspace()
-  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam } = useAccess()
+  const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam, isAdmin } = useAccess()
   const groups = groupOptions(task?.groupId ?? null)
   const { isEnabled } = useFeatures()
   const { can } = usePermissions()
+  const { userType } = useSession()
   const canAssign = can(PERMISSIONS.TASK_ASSIGN)
   const canSize = can(PERMISSIONS.TASK_WEIGHTAGE_SET)
+  const canWriteDescription = (userType?.id !== EMPLOYEE_TYPE_ID || isAdmin) && can(PERMISSIONS.TASK_UPDATE)
+  const canAttach = can(PERMISSIONS.TASK_UPDATE)
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
   const scheduled = column.kind === 'scheduled'
   const isEditing = Boolean(task)
@@ -105,11 +125,16 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
     sizeKey: task?.sizeKey ?? 'M',
     dueDate: task ? (task.scheduledDate ?? task.dueDate ?? '') : scheduled ? daysFromNow(1) : toIsoDate(new Date()),
   })
+  const [description, setDescription] = useState(task?.description ?? '')
+  const [showDescription, setShowDescription] = useState(Boolean(task?.description))
+  const [queued, setQueued] = useState([])
+  const [note, setNote] = useState('')
   const [menu, setMenu] = useState(null)
   const [missing, setMissing] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
   const inputRef = useRef(null)
+  const fileRef = useRef(null)
 
   useEffect(() => {
     const handleKey = (event) => {
@@ -140,6 +165,28 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
   const size = sizeByKey(values.sizeKey)
   const priorityTone = STATUS_TONES[PRIORITY_TONES[values.priority] ?? 'gray']
 
+  const addFiles = async (list) => {
+    const files = Array.from(list ?? [])
+    if (files.length === 0) return
+    setError(null)
+    if (!isEditing) {
+      setQueued((current) => [...current, ...files])
+      return
+    }
+    setNote(`Uploading ${files.length} image${files.length === 1 ? '' : 's'}…`)
+    const failed = []
+    for (const file of files) {
+      try {
+        await attachmentService.upload({ ownerType: 'task', ownerId: task.id, file, category: 'reference' })
+      } catch {
+        failed.push(file.name)
+      }
+    }
+    const added = files.length - failed.length
+    setNote(added > 0 ? `${added} image${added === 1 ? '' : 's'} added` : '')
+    if (failed.length > 0) setError(`Could not upload: ${failed.join(', ')}`)
+  }
+
   const save = async () => {
     const problems = {}
     if (!title.trim()) problems.title = true
@@ -163,6 +210,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
         ...(canAssign ? { assigneeIds: values.assigneeIds } : {}),
         priority: values.priority,
         ...(canSize ? { sizeKey: values.sizeKey, points: size.points } : {}),
+        ...(canWriteDescription ? { description: description.trim() } : {}),
         dueDate: values.dueDate || toIsoDate(new Date()),
         scheduledDate: scheduled ? values.dueDate || daysFromNow(1) : null,
       }
@@ -170,11 +218,20 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
         const saved = await taskService.updateTask(task.id, payload)
         onSaved?.(saved)
       } else {
-        const saved = await taskService.createTask(activeWorkspaceId, {
-          ...payload,
-          description: '',
-          statusId: column.id,
-        })
+        const saved = await taskService.createTask(activeWorkspaceId, { ...payload, statusId: column.id })
+        if (queued.length > 0) {
+          setNote(`Uploading ${queued.length} image${queued.length === 1 ? '' : 's'}…`)
+          const failed = []
+          for (const file of queued) {
+            try {
+              await attachmentService.upload({ ownerType: 'task', ownerId: saved.id, file, category: 'reference' })
+            } catch {
+              failed.push(file.name)
+            }
+          }
+          setNote('')
+          if (failed.length > 0) setError(`Task created, but these images did not upload: ${failed.join(', ')}`)
+        }
         onCreated?.(saved)
       }
     } catch (caught) {
@@ -325,7 +382,117 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
             </Typography>
           </QuickRow>
         ) : null}
+
+        {canWriteDescription && !showDescription ? (
+          <QuickRow
+            icon={AlignLeft}
+            label="Add description"
+            filled={Boolean(description.trim())}
+            onClick={() => setShowDescription(true)}
+          >
+            {description.trim() ? (
+              <Typography variant="body2" noWrap>
+                {description.trim()}
+              </Typography>
+            ) : null}
+          </QuickRow>
+        ) : null}
+
+        {canAttach ? (
+          <QuickRow
+            icon={ImagePlus}
+            label={isEditing ? 'Add images' : 'Add reference images'}
+            filled={queued.length > 0}
+            onClick={() => fileRef.current?.click()}
+          >
+            {queued.length > 0 ? (
+              <Typography variant="body2">
+                {queued.length} image{queued.length === 1 ? '' : 's'} ready
+              </Typography>
+            ) : null}
+          </QuickRow>
+        ) : null}
       </Stack>
+
+      {canWriteDescription && showDescription ? (
+        <TextField
+          autoFocus
+          multiline
+          minRows={2}
+          maxRows={6}
+          size="small"
+          fullWidth
+          value={description}
+          onChange={(event) => setDescription(event.target.value)}
+          placeholder="What needs to be done, links, references…"
+          sx={{ mt: 0.75, '& .MuiInputBase-input': { fontSize: '0.8125rem' } }}
+        />
+      ) : null}
+
+      {canAttach ? (
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+          multiple
+          hidden
+          aria-label="Choose reference images"
+          onChange={(event) => {
+            addFiles(event.target.files)
+            event.target.value = ''
+          }}
+        />
+      ) : null}
+
+      {queued.length > 0 ? (
+        <Stack direction="row" spacing={0.5} useFlexGap sx={{ flexWrap: 'wrap', mt: 0.75, px: 0.5 }}>
+          {queued.map((file, index) => (
+            <Box
+              key={`${file.name}-${index}`}
+              sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 0.375,
+                maxWidth: '100%',
+                px: 0.75,
+                py: 0.125,
+                borderRadius: 1.5,
+                bgcolor: colors.brandSoft,
+                border: `1px solid ${STATUS_TONES.blue.border}`,
+                color: colors.brandDark,
+                fontSize: '0.6875rem',
+                fontWeight: 600,
+              }}
+            >
+              <Box component="span" sx={{ maxWidth: 120, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {file.name}
+              </Box>
+              <Box
+                component="button"
+                type="button"
+                aria-label={`Remove ${file.name}`}
+                onClick={() => setQueued((current) => current.filter((_, position) => position !== index))}
+                sx={{
+                  display: 'inline-flex',
+                  border: 0,
+                  p: 0,
+                  bgcolor: 'transparent',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                }}
+              >
+                <X size={11} strokeWidth={2.5} aria-hidden="true" />
+              </Box>
+            </Box>
+          ))}
+        </Stack>
+      ) : null}
+
+      {note ? (
+        <Typography variant="caption" component="p" sx={{ mt: 0.75, px: 1, color: colors.textSecondary }}>
+          {note}
+        </Typography>
+      ) : null}
 
       {missingLabels.length > 0 || error ? (
         <Typography variant="caption" component="p" sx={{ mt: 0.75, px: 1, color: STATUS_TONES.rose.strong }}>

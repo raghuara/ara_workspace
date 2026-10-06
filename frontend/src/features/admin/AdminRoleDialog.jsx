@@ -5,6 +5,7 @@ import { ToneChip } from '@/components/ToneChip'
 import { ROUTES } from '@/constants/routes'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 import { colors } from '@/theme/tokens'
+import { listRowSx } from '@/theme/rowSx'
 
 const REASONS = {
   owner: { label: 'Owner', tone: 'rose', hint: 'The workspace owner is always its admin.' },
@@ -55,7 +56,7 @@ export const AdminRoleDialog = ({ change, confirming, onConfirm, onClose }) => {
                 key={workspace.id}
                 direction="row"
                 spacing={1.25}
-                sx={{ alignItems: 'center', px: 1.5, py: 1, borderBottom: `1px solid ${colors.border}`, '&:last-of-type': { borderBottom: 0 } }}
+                sx={{ alignItems: 'center', px: 1.5, py: 1, ...listRowSx }}
               >
                 <Box sx={{ display: 'inline-flex', color: colors.textSecondary }}>
                   <Building2 size={15} strokeWidth={1.75} aria-hidden="true" />

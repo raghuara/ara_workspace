@@ -21,6 +21,27 @@ import { colors } from '@/theme/tokens'
 
 const LEVEL_LABEL = { edit: 'Edit', view: 'View', none: 'No access' }
 
+const SELECTED = {
+  inherit: { tone: STATUS_TONES.slate, bgcolor: STATUS_TONES.slate.tint, color: colors.textPrimary },
+  view: { tone: STATUS_TONES.amber, bgcolor: STATUS_TONES.amber.strong, color: colors.surface },
+  edit: { tone: STATUS_TONES.green, bgcolor: STATUS_TONES.green.strong, color: colors.surface },
+}
+
+const levelSx = (level) => {
+  const { tone, bgcolor, color } = SELECTED[level]
+  return {
+    gap: 0.5,
+    '&.Mui-selected': {
+      zIndex: 1,
+      bgcolor,
+      color,
+      borderColor: tone.strong,
+      '&:hover': { bgcolor },
+      '&.Mui-focusVisible': { boxShadow: `0 0 0 3px ${tone.border}` },
+    },
+  }
+}
+
 const LevelToggle = ({ value, onChange, inheritLabel, size = 'small' }) => (
   <ToggleButtonGroup
     exclusive
@@ -30,18 +51,28 @@ const LevelToggle = ({ value, onChange, inheritLabel, size = 'small' }) => (
       if (next !== null) onChange(next === 'inherit' ? null : next)
     }}
     sx={{
-      '& .MuiToggleButton-root': { px: 1.25, py: 0.375, textTransform: 'none', fontSize: '0.75rem', fontWeight: 600 },
+      flexShrink: 0,
+      alignSelf: { xs: 'flex-start', sm: 'center' },
+      maxWidth: '100%',
+      '& .MuiToggleButton-root': {
+        px: 1.25,
+        py: 0.375,
+        textTransform: 'none',
+        fontSize: '0.75rem',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        color: colors.textSecondary,
+        borderColor: colors.border,
+      },
     }}
   >
-    {inheritLabel ? (
-      <ToggleButton value="inherit">{inheritLabel}</ToggleButton>
-    ) : (
-      <ToggleButton value="inherit">No access</ToggleButton>
-    )}
-    <ToggleButton value="view" sx={{ gap: 0.5 }}>
+    <ToggleButton value="inherit" sx={levelSx('inherit')}>
+      {inheritLabel ?? 'No access'}
+    </ToggleButton>
+    <ToggleButton value="view" sx={levelSx('view')}>
       <Eye size={13} strokeWidth={2} aria-hidden="true" /> View
     </ToggleButton>
-    <ToggleButton value="edit" sx={{ gap: 0.5 }}>
+    <ToggleButton value="edit" sx={levelSx('edit')}>
       <Pencil size={13} strokeWidth={2} aria-hidden="true" /> Edit
     </ToggleButton>
   </ToggleButtonGroup>
@@ -88,8 +119,6 @@ export const MemberAccessDialog = ({ workspaceId, member, groups, onClose, onSav
       setSaving(false)
     }
   }
-
-  const workspaceLabel = LEVEL_LABEL[effective(workspace)]
 
   return (
     <Dialog open onClose={saving ? undefined : onClose} maxWidth="sm" fullWidth>
@@ -175,7 +204,7 @@ export const MemberAccessDialog = ({ workspaceId, member, groups, onClose, onSav
                   <LevelToggle
                     value={groupLevels[group.id] ?? null}
                     onChange={(level) => setGroup(group.id, level)}
-                    inheritLabel={`Same as workspace (${workspaceLabel})`}
+                    inheritLabel="Same as workspace"
                   />
                 </Stack>
                 {group.teams.map((team) => {
@@ -208,7 +237,7 @@ export const MemberAccessDialog = ({ workspaceId, member, groups, onClose, onSav
                       <LevelToggle
                         value={teamLevels[team.id] ?? null}
                         onChange={(level) => setTeam(team.id, level)}
-                        inheritLabel={`Same as group (${LEVEL_LABEL[groupEffective]})`}
+                        inheritLabel="Same as group"
                       />
                     </Stack>
                   )

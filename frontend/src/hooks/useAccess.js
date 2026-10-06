@@ -36,7 +36,8 @@ export const useAccess = () => {
       isAdmin: Boolean(access?.admin),
       levelFor,
       canEditIn,
-      canEditTask: (task) => canEditIn(task) || (task?.assigneeIds ?? []).includes(user?.id),
+      canEditTask: (task) => canEditIn(task),
+      canMoveTask: (task) => levelFor(task) !== 'none' || (task?.assigneeIds ?? []).includes(user?.id),
       canCreateAnywhere: editableGroups.length > 0,
       groupOptions: (currentGroupId = null) =>
         groups.filter((group) => group.id === currentGroupId || editableGroups.includes(group)),

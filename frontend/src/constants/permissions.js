@@ -94,10 +94,13 @@ export const PERMISSION_CATALOG = [
   {
     key: 'people',
     label: 'People',
-    description: 'The employee directory',
+    description: 'The employee directory, departments and designations',
     permissions: [
-      { key: PERMISSIONS.EMPLOYEE_VIEW, label: 'View employees' },
-      { key: PERMISSIONS.EMPLOYEE_UPDATE, label: 'Edit employee records' },
+      { key: PERMISSIONS.EMPLOYEE_VIEW, label: 'View employees, departments and designations' },
+      {
+        key: PERMISSIONS.EMPLOYEE_UPDATE,
+        label: 'Onboard and edit employees, and manage departments and designations',
+      },
     ],
   },
   {

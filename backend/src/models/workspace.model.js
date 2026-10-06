@@ -148,6 +148,21 @@ const upsertMember = async (member, connection = pool) => {
   );
 };
 
+const findMemberVisibility = async (workspaceId, employeeId) => {
+  const [rows] = await pool.query(
+    "SELECT sees_team_tasks FROM workspace_members WHERE workspace_id = ? AND employee_id = ? LIMIT 1",
+    [workspaceId, employeeId]
+  );
+  return Boolean(rows[0]?.sees_team_tasks);
+};
+
+const setMemberVisibility = async (workspaceId, employeeId, seesTeamTasks, connection = pool) => {
+  await connection.query(
+    "UPDATE workspace_members SET sees_team_tasks = ? WHERE workspace_id = ? AND employee_id = ?",
+    [seesTeamTasks ? 1 : 0, workspaceId, employeeId]
+  );
+};
+
 const removeMember = async (workspaceId, employeeId) => {
   await pool.query("DELETE FROM workspace_members WHERE workspace_id = ? AND employee_id = ?", [
     workspaceId,
@@ -160,8 +175,8 @@ const findMembers = async (workspaceId) => {
     `SELECT
        m.employee_id,
        m.user_type_id,
-       m.group_id,
        m.team_id,
+       m.sees_team_tasks,
        CONCAT(e.first_name, ' ', e.last_name) AS full_name,
        e.designation,
        e.department,
@@ -353,12 +368,13 @@ const countTasksInColumn = async (columnId) => {
 };
 
 const employeesExist = async (employeeIds, connection = pool) => {
-  if (employeeIds.length === 0) return true;
+  const ids = [...new Set(employeeIds.filter(Boolean))];
+  if (ids.length === 0) return true;
   const [[{ found }]] = await connection.query(
     "SELECT COUNT(DISTINCT employee_id) AS found FROM employees WHERE employee_id IN (?)",
-    [employeeIds]
+    [ids]
   );
-  return found === employeeIds.length;
+  return found === ids.length;
 };
 
 const findAdminWorkspacesFor = async (employeeId, connection = pool) => {
@@ -402,6 +418,8 @@ module.exports = {
   deleteWorkspace,
   isMember,
   upsertMember,
+  findMemberVisibility,
+  setMemberVisibility,
   removeMember,
   findMembers,
   findGroups,

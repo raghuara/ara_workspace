@@ -19,7 +19,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { QueryStateView } from '@/components/QueryStateView'
 import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
-import { ListSectionSkeleton, StatTileSkeleton } from '@/components/Skeletons'
+import { ChartSectionSkeleton, DonutSectionSkeleton, ListSectionSkeleton, StatTileSkeleton } from '@/components/Skeletons'
 import { TaskDetailDrawer } from '@/features/workspace/components/TaskDetailDrawer'
 import { TaskFormDialog } from '@/features/workspace/components/TaskFormDialog'
 import { taskService } from '@/api/taskService'
@@ -32,7 +32,8 @@ import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors } from '@/theme/tokens'
 import { daysUntil, formatDate, formatLongDate, parseIsoDate } from '@/utils/date'
 import { MONTH_NAMES, monthRange } from '@/utils/fiscalYear'
-import { StatusSplitBar } from './StatusSplitBar'
+import { EmployeeInsights } from './EmployeeInsights'
+import { buildInsights } from './employeeInsightsData'
 
 const GAP = 1.5
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
@@ -61,15 +62,11 @@ const firstName = (name) => {
 }
 
 const summaryOf = ({ overdue, dueToday, pending }) => {
-  if (overdue && dueToday) {
-    return `${plural(overdue, 'task')} overdue and ${dueToday} due today. Start with the overdue ${overdue === 1 ? 'one' : 'ones'}.`
-  }
-  if (overdue) {
-    return `${plural(overdue, 'task')} ${overdue === 1 ? 'is' : 'are'} past the due date. Clear ${overdue === 1 ? 'it' : 'them'} first.`
-  }
-  if (dueToday) return `Nothing overdue. ${plural(dueToday, 'task')} due today.`
-  if (pending) return `Nothing due today. ${plural(pending, 'task')} waiting in your queue.`
-  return 'You are all caught up. New assignments will show up here.'
+  if (overdue && dueToday) return `${overdue} overdue and ${dueToday} due today — clear the overdue first.`
+  if (overdue) return `${overdue} overdue — clear ${overdue === 1 ? 'it' : 'them'} first.`
+  if (dueToday) return `Nothing overdue · ${dueToday} due today.`
+  if (pending) return `Nothing due today · ${pending} in your queue.`
+  return 'All caught up.'
 }
 
 const urgencyOf = (task, today) =>
@@ -118,6 +115,7 @@ const summarise = (data, userId, today, period) => {
     .filter((segment) => segment.count > 0)
 
   return {
+    tasks,
     total: tasks.length,
     pending,
     overdue: pending.filter((task) => task.isOverdue),
@@ -133,8 +131,8 @@ const summarise = (data, userId, today, period) => {
   }
 }
 
-const PointsRing = ({ earned, planned, size = 96 }) => {
-  const stroke = 8
+const PointsRing = ({ earned, planned, size = 72 }) => {
+  const stroke = 7
   const radius = (size - stroke) / 2
   const circumference = 2 * Math.PI * radius
   const share = planned > 0 ? Math.min(1, earned / planned) : earned > 0 ? 1 : 0
@@ -148,7 +146,7 @@ const PointsRing = ({ earned, planned, size = 96 }) => {
           cy={center}
           r={radius}
           fill="none"
-          stroke="rgba(255, 255, 255, 0.22)"
+          stroke={colors.brandTint}
           strokeWidth={stroke}
         />
         {share > 0 ? (
@@ -157,7 +155,7 @@ const PointsRing = ({ earned, planned, size = 96 }) => {
             cy={center}
             r={radius}
             fill="none"
-            stroke="#FFFFFF"
+            stroke={colors.brand}
             strokeWidth={stroke}
             strokeLinecap="round"
             strokeDasharray={circumference}
@@ -171,10 +169,10 @@ const PointsRing = ({ earned, planned, size = 96 }) => {
         <Typography
           component="span"
           sx={{
-            fontSize: '1.5rem',
+            fontSize: '1.125rem',
             fontWeight: 700,
             lineHeight: 1,
-            color: '#FFFFFF',
+            color: colors.textPrimary,
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -182,7 +180,7 @@ const PointsRing = ({ earned, planned, size = 96 }) => {
         </Typography>
         <Typography
           component="span"
-          sx={{ mt: 0.25, fontSize: '0.6875rem', fontWeight: 600, color: 'rgba(255, 255, 255, 0.8)' }}
+          sx={{ mt: 0.125, fontSize: '0.625rem', fontWeight: 600, color: colors.textSecondary }}
         >
           pts
         </Typography>
@@ -203,11 +201,7 @@ const HeroBanner = ({
   onReviewOverdue,
 }) => {
   const note =
-    planned > earned
-      ? `${planned - earned} pts still due in ${periodName}`
-      : earned > 0
-        ? 'Everything due so far is done'
-        : 'Finish tasks to earn points'
+    planned > earned ? `${planned - earned} pts to go` : earned > 0 ? 'All due work done' : 'No points yet'
 
   return (
     <Box
@@ -218,14 +212,19 @@ const HeroBanner = ({
         overflow: 'hidden',
         display: 'grid',
         gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
-        gap: { xs: 2, md: 3 },
+        gap: { xs: 1.5, md: 2.5 },
         alignItems: 'center',
-        px: { xs: 2, md: 3 },
-        py: { xs: 2, md: 2.5 },
+        px: { xs: 2, md: 2.5 },
+        py: { xs: 1.5, md: 1.75 },
+        pt: { xs: 2, md: 2.25 },
         borderRadius: 3,
-        color: '#FFFFFF',
-        background: 'linear-gradient(120deg, #1E3A8A 0%, #1D4ED8 42%, #2563EB 72%, #3B82F6 100%)',
-        boxShadow: '0 16px 32px -20px rgba(29, 78, 216, 0.8)',
+        color: colors.textPrimary,
+        border: '1px solid transparent',
+        background: [
+          `linear-gradient(120deg, ${colors.surface} 0%, ${colors.brandSoft} 55%, ${colors.brandTint} 100%) padding-box`,
+          'linear-gradient(120deg, #BFDBFE 0%, #C7D2FE 50%, #BAE6FD 100%) border-box',
+        ].join(', '),
+        boxShadow: '0 14px 30px -22px rgba(37, 99, 235, 0.5), 0 1px 2px rgba(15, 23, 42, 0.04)',
         '&::before': {
           content: '""',
           position: 'absolute',
@@ -235,7 +234,7 @@ const HeroBanner = ({
           width: 300,
           height: 300,
           borderRadius: '50%',
-          bgcolor: 'rgba(255, 255, 255, 0.07)',
+          bgcolor: 'rgba(37, 99, 235, 0.05)',
           pointerEvents: 'none',
         },
         '&::after': {
@@ -247,20 +246,48 @@ const HeroBanner = ({
           width: 200,
           height: 200,
           borderRadius: '50%',
-          bgcolor: 'rgba(255, 255, 255, 0.06)',
+          bgcolor: 'rgba(37, 99, 235, 0.04)',
           pointerEvents: 'none',
         },
       }}
     >
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          zIndex: 1,
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 4,
+          background: 'linear-gradient(90deg, #2563EB 0%, #6366F1 45%, #7C3AED 70%, #0EA5E9 100%)',
+        }}
+      />
+      <Box
+        aria-hidden="true"
+        sx={{
+          position: 'absolute',
+          zIndex: 0,
+          top: 0,
+          right: 0,
+          bottom: 0,
+          width: { xs: '100%', md: '48%' },
+          backgroundImage: 'radial-gradient(rgba(37, 99, 235, 0.16) 1px, transparent 1.2px)',
+          backgroundSize: '14px 14px',
+          maskImage: 'linear-gradient(to left, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%)',
+          WebkitMaskImage: 'linear-gradient(to left, #000 0%, rgba(0, 0, 0, 0.55) 45%, transparent 100%)',
+          pointerEvents: 'none',
+        }}
+      />
       <Box sx={{ position: 'relative', zIndex: 1, minWidth: 0 }}>
-        <Typography component="p" sx={{ ...overline, color: 'rgba(255, 255, 255, 0.78)' }}>
+        <Typography component="p" sx={{ ...overline, fontSize: '0.625rem', color: colors.brand }}>
           {dateLine}
         </Typography>
         <Typography
           component="h1"
           sx={{
-            mt: 0.75,
-            fontSize: { xs: '1.25rem', md: '1.5rem' },
+            mt: 0.375,
+            fontSize: { xs: '1.125rem', md: '1.25rem' },
             fontWeight: 700,
             letterSpacing: '-0.02em',
             lineHeight: 1.2,
@@ -270,24 +297,19 @@ const HeroBanner = ({
         </Typography>
         <Typography
           component="p"
-          sx={{ mt: 0.75, maxWidth: 560, fontSize: '0.875rem', color: 'rgba(255, 255, 255, 0.88)' }}
+          sx={{ mt: 0.375, maxWidth: 560, fontSize: '0.8125rem', color: colors.textSecondary }}
         >
           {summary}
         </Typography>
-        <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 2, flexWrap: 'wrap' }}>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ mt: 1.5, flexWrap: 'wrap' }}>
           <Button
             component={Link}
             to={workspaceViewPath('board')}
             variant="contained"
             size="small"
+            disableElevation
             endIcon={<ArrowRight size={14} strokeWidth={2} />}
-            sx={{
-              bgcolor: '#FFFFFF',
-              color: colors.brandDark,
-              fontWeight: 600,
-              boxShadow: '0 6px 14px -6px rgba(15, 23, 42, 0.45)',
-              '&:hover': { bgcolor: colors.brandSoft },
-            }}
+            sx={{ fontWeight: 600 }}
           >
             Open my board
           </Button>
@@ -298,9 +320,10 @@ const HeroBanner = ({
               onClick={onReviewOverdue}
               startIcon={<TriangleAlert size={14} strokeWidth={2} />}
               sx={{
-                color: '#FFFFFF',
-                borderColor: 'rgba(255, 255, 255, 0.45)',
-                '&:hover': { borderColor: '#FFFFFF', bgcolor: 'rgba(255, 255, 255, 0.1)' },
+                color: STATUS_TONES.rose.strong,
+                borderColor: STATUS_TONES.rose.border,
+                bgcolor: colors.surface,
+                '&:hover': { borderColor: STATUS_TONES.rose.strong, bgcolor: STATUS_TONES.rose.soft },
               }}
             >
               Review overdue
@@ -315,35 +338,32 @@ const HeroBanner = ({
           zIndex: 1,
           display: 'flex',
           alignItems: 'center',
-          gap: 2,
-          minWidth: { md: 300 },
-          p: { xs: 1.5, md: 1.75 },
-          pr: { md: 2.5 },
+          gap: 1.5,
+          minWidth: { md: 250 },
+          p: 1.25,
+          pr: { md: 2 },
           borderRadius: 2.5,
-          bgcolor: 'rgba(255, 255, 255, 0.12)',
-          border: '1px solid rgba(255, 255, 255, 0.2)',
-          backdropFilter: 'blur(4px)',
+          bgcolor: colors.surface,
+          border: `1px solid ${STATUS_TONES.blue.border}`,
+          boxShadow: '0 6px 18px -12px rgba(37, 99, 235, 0.35)',
         }}
       >
         <PointsRing earned={earned} planned={planned} />
         <Box sx={{ minWidth: 0 }}>
-          <Typography component="p" sx={{ ...overline, color: 'rgba(255, 255, 255, 0.78)' }}>
+          <Typography component="p" sx={{ ...overline, fontSize: '0.625rem', color: colors.brand }}>
             Points · {periodName}
           </Typography>
           <Typography
             component="p"
-            sx={{ mt: 0.25, fontSize: '1.125rem', fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}
+            sx={{ mt: 0.25, fontSize: '1rem', fontWeight: 700, lineHeight: 1.3, fontVariantNumeric: 'tabular-nums' }}
           >
             {earned}{' '}
-            <Box component="span" sx={{ fontSize: '0.8125rem', fontWeight: 500, opacity: 0.82 }}>
+            <Box component="span" sx={{ fontSize: '0.75rem', fontWeight: 500, color: colors.textSecondary }}>
               {planned > earned ? `of ${planned} pts` : 'pts earned'}
             </Box>
           </Typography>
-          <Typography component="p" sx={{ mt: 0.5, fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.82)' }}>
-            {note}
-          </Typography>
-          <Typography component="p" sx={{ mt: 0.25, fontSize: '0.75rem', color: 'rgba(255, 255, 255, 0.82)' }}>
-            {plural(completedCount, 'task')} completed
+          <Typography component="p" sx={{ mt: 0.25, fontSize: '0.75rem', color: colors.textSecondary }}>
+            {note} · {plural(completedCount, 'task')} done
           </Typography>
         </Box>
       </Box>
@@ -702,7 +722,7 @@ const WeekDay = ({ day, selected, onClick }) => {
 export const EmployeeDashboard = () => {
   const { user } = useSession()
   const { activeWorkspace, activeWorkspaceId } = useWorkspace()
-  const { yearRange, yearLabel, isCurrentYear } = usePeriod()
+  const { yearRange, yearLabel, isCurrentYear, months } = usePeriod()
   const board = useAsync(taskService.getBoard, [activeWorkspaceId, yearRange], { enabled: Boolean(activeWorkspaceId) })
 
   const [filter, setFilter] = useState('all')
@@ -716,6 +736,13 @@ export const EmployeeDashboard = () => {
   const periodName = isCurrentYear ? MONTH_NAMES[now.getMonth()] : `FY ${yearLabel}`
 
   const mine = summarise(board.data, user?.id, today, period)
+  const insights = buildInsights({
+    tasks: mine.tasks,
+    pending: mine.pending,
+    statusSegments: mine.statusSegments,
+    months,
+    yearRange,
+  })
 
   const weekDates = weekAround(now)
   const week = weekDates.map((date) => {
@@ -833,6 +860,17 @@ export const EmployeeDashboard = () => {
               sx={{
                 display: 'grid',
                 gap: GAP,
+                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)' },
+              }}
+            >
+              <ChartSectionSkeleton bars={6} height={150} />
+              <DonutSectionSkeleton />
+              <ListSectionSkeleton rows={3} />
+            </Box>
+            <Box
+              sx={{
+                display: 'grid',
+                gap: GAP,
                 gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.75fr) minmax(320px, 1fr)' },
                 alignItems: 'start',
               }}
@@ -881,6 +919,8 @@ export const EmployeeDashboard = () => {
                 </TileButton>
               ))}
             </Box>
+
+            <EmployeeInsights insights={insights} yearLabel={yearLabel} />
 
             <Box
               sx={{
@@ -1005,60 +1045,6 @@ export const EmployeeDashboard = () => {
                       />
                     ))}
                   </Box>
-                </SectionCard>
-
-                <SectionCard
-                  title="My tasks by status"
-                  description={`${plural(mine.total, 'task')} · FY ${yearLabel}`}
-                  accent="violet"
-                >
-                  {mine.statusSegments.length === 0 ? (
-                    <Typography variant="caption" component="p">
-                      No tasks assigned yet.
-                    </Typography>
-                  ) : (
-                    <>
-                      <StatusSplitBar
-                        segments={mine.statusSegments}
-                        height={8}
-                        legend={false}
-                        ariaLabel="My tasks by status"
-                      />
-                      <Stack spacing={1} sx={{ mt: 1.5 }}>
-                        {mine.statusSegments.map((segment) => {
-                          const tone = STATUS_TONES[segment.tone] ?? STATUS_TONES.slate
-                          return (
-                            <Stack key={segment.id} direction="row" spacing={1} sx={{ alignItems: 'center' }}>
-                              <Box
-                                aria-hidden="true"
-                                sx={{ width: 8, height: 8, borderRadius: '2px', bgcolor: tone.strong, flexShrink: 0 }}
-                              />
-                              <Typography variant="body2" noWrap sx={{ flex: 1, minWidth: 0 }}>
-                                {segment.name}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                sx={{ color: colors.textSecondary, fontVariantNumeric: 'tabular-nums' }}
-                              >
-                                {Math.round((segment.count / mine.total) * 100)}%
-                              </Typography>
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  width: 28,
-                                  textAlign: 'right',
-                                  fontWeight: 700,
-                                  fontVariantNumeric: 'tabular-nums',
-                                }}
-                              >
-                                {segment.count}
-                              </Typography>
-                            </Stack>
-                          )
-                        })}
-                      </Stack>
-                    </>
-                  )}
                 </SectionCard>
 
                 <SectionCard

@@ -96,14 +96,27 @@ export const WorkspaceProvider = ({ children }) => {
     setDetail(loaded)
   }, [activeWorkspaceId])
 
-  const refreshWorkspaces = useCallback(async () => {
-    const list = await workspaceService.listWorkspaces()
-    setWorkspaces(list)
-    if (activeWorkspaceId && !list.some((workspace) => workspace.id === activeWorkspaceId) && list[0]) {
-      await selectWorkspace(list[0].id)
-    }
-    return list
-  }, [activeWorkspaceId, selectWorkspace])
+  const refreshWorkspaces = useCallback(
+    async (preferredId) => {
+      const list = await workspaceService.listWorkspaces()
+      setWorkspaces(list)
+
+      const stillThere = list.some((workspace) => workspace.id === activeWorkspaceId)
+      const target = list.some((workspace) => workspace.id === preferredId)
+        ? preferredId
+        : activeWorkspaceId && stillThere
+          ? null
+          : (list[0]?.id ?? null)
+
+      if (target) await selectWorkspace(target)
+      else if (!list.length) {
+        setActiveWorkspaceId(null)
+        setDetail(EMPTY_DETAIL)
+      }
+      return list
+    },
+    [activeWorkspaceId, selectWorkspace],
+  )
 
   const teams = useMemo(
     () =>

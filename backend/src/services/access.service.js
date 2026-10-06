@@ -6,6 +6,9 @@ const LEVEL_RANK = { none: 0, view: 1, edit: 2 };
 
 const isMasterAdmin = (req) => req.user.userTypeId === USER_TYPE.MASTER_ADMIN;
 
+const isAdmin = (req) =>
+  req.user.userTypeId === USER_TYPE.MASTER_ADMIN || req.user.userTypeId === USER_TYPE.ADMIN;
+
 const allowedWorkspaceIds = async (req) =>
   isMasterAdmin(req) ? null : workspaceModel.findWorkspaceIdsForEmployee(req.user.employeeId);
 
@@ -28,16 +31,21 @@ const assignableUserTypes = (req, userTypes) => {
   );
 };
 
-const isOwnTasksOnly = async (req, workspaceId) =>
-  req.user.userTypeId === USER_TYPE.EMPLOYEE && !(await accessModel.isWorkspaceAdmin(workspaceId, req.user.employeeId));
+const isOwnTasksOnly = async (req, workspaceId) => {
+  const scopes = await resolveScopes(req, workspaceId);
+  return !scopes.admin && !scopes.seesTeamTasks;
+};
 
 const resolveScopes = async (req, workspaceId) => {
-  if (req.user.userTypeId === USER_TYPE.MASTER_ADMIN || (await accessModel.isWorkspaceAdmin(workspaceId, req.user.employeeId))) {
-    return { admin: true, workspace: "edit", groups: new Map(), teams: new Map(), employeeId: req.user.employeeId };
+  if (isAdmin(req) || (await accessModel.isWorkspaceAdmin(workspaceId, req.user.employeeId))) {
+    return { admin: true, workspace: "edit", groups: new Map(), teams: new Map(), employeeId: req.user.employeeId, seesTeamTasks: true };
   }
 
-  const scopes = { admin: false, workspace: "none", groups: new Map(), teams: new Map(), employeeId: req.user.employeeId };
-  if (req.user.userTypeId === USER_TYPE.EMPLOYEE) return scopes;
+  const seesTeamTasks =
+    req.user.userTypeId !== USER_TYPE.EMPLOYEE ||
+    (await workspaceModel.findMemberVisibility(workspaceId, req.user.employeeId));
+
+  const scopes = { admin: false, workspace: "none", groups: new Map(), teams: new Map(), employeeId: req.user.employeeId, seesTeamTasks };
 
   const grants = await accessModel.findGrants(workspaceId, req.user.employeeId);
   grants.forEach((grant) => {
@@ -56,7 +64,7 @@ const levelForTask = (scopes, task, teamGroupMap = null) => {
   let level = scopes.workspace;
   if (groupId && scopes.groups.has(groupId)) level = scopes.groups.get(groupId);
   if (task.teamId && scopes.teams.has(task.teamId)) level = scopes.teams.get(task.teamId);
-  if (assigned && LEVEL_RANK[level] < LEVEL_RANK.edit) level = "edit";
+  if (assigned && LEVEL_RANK[level] < LEVEL_RANK.view) level = "view";
   return level;
 };
 
@@ -77,6 +85,15 @@ const levelForTeam = (scopes, teamId, groupId) => {
 
 const visibilityFilter = (scopes) => {
   if (scopes.admin || scopes.workspace !== "none") return null;
+
+  if (!scopes.seesTeamTasks) {
+    return {
+      employeeId: scopes.employeeId,
+      groupIds: [],
+      teamIds: []
+    };
+  }
+
   return {
     employeeId: scopes.employeeId,
     groupIds: [...scopes.groups.keys()],
@@ -87,6 +104,7 @@ const visibilityFilter = (scopes) => {
 module.exports = {
   LEVEL_RANK,
   isMasterAdmin,
+  isAdmin,
   allowedWorkspaceIds,
   inScope,
   assignableUserTypes,

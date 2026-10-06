@@ -1,0 +1,5 @@
+{
+    "appService.defaultWebAppToDeploy": "/subscriptions/4c2ea39d-7fe0-40ca-bf43-df0240df4b35/resourceGroups/appsvc_linux_centralus/providers/Microsoft.Web/sites/araworkspace",
+    "appService.deploySubpath": ".",
+    "appService.zipIgnorePattern": [".env"]
+}

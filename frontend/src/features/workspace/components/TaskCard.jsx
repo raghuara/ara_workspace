@@ -93,12 +93,14 @@ export const TaskCard = ({
 
   const interactive = Boolean(onAction) && !lifted && !isDragging
   const completed = task.statusKind === 'completed'
-  const { canEditTask, canCreateAnywhere } = useAccess()
+  const { canEditTask, canMoveTask, canCreateAnywhere } = useAccess()
   const editable = canEditTask(task)
-  const canMove = can(PERMISSIONS.TASK_MOVE) && editable
+  const canMove = can(PERMISSIONS.TASK_MOVE) && canMoveTask(task)
   const canUpdate = can(PERMISSIONS.TASK_UPDATE) && editable
   const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
   const canDelete = can(PERMISSIONS.TASK_DELETE) && editable
+  const canChangeColumn = canMove && columns.length > 1
+  const hasMenu = canUpdate || canCreate || canChangeColumn || canDelete
   const menuOpen = Boolean(menu)
 
   const closeMenu = () => {
@@ -190,7 +192,9 @@ export const TaskCard = ({
             <ActionButton title="Mark complete" icon={Check} tone="green" onClick={() => onAction('complete', task)} />
           ) : null}
           {canUpdate ? <ActionButton title="Edit" icon={Pencil} onClick={() => onAction('edit', task)} /> : null}
-          <ActionButton title="More" icon={Ellipsis} onClick={(event) => setMenu(event.currentTarget)} />
+          {hasMenu ? (
+            <ActionButton title="More" icon={Ellipsis} onClick={(event) => setMenu(event.currentTarget)} />
+          ) : null}
         </Stack>
       ) : null}
 
@@ -359,7 +363,7 @@ export const TaskCard = ({
                       <ListItemText primary="Duplicate" slotProps={{ primary: { fontSize: '0.8125rem' } }} />
                     </MenuItem>
                   ) : null,
-                  canMove && columns.length > 1 ? (
+                  canChangeColumn ? (
                     <MenuItem key="move" onClick={() => setMenuView('move')}>
                       <ListItemIcon>
                         <ArrowRightLeft size={15} strokeWidth={1.75} />

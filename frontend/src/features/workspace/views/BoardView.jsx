@@ -123,7 +123,7 @@ export const BoardView = ({
   const { can } = usePermissions()
   const { activeWorkspaceId } = useWorkspace()
   const canMove = can(PERMISSIONS.TASK_MOVE)
-  const { canEditTask, canCreateAnywhere } = useAccess()
+  const { canMoveTask, canCreateAnywhere } = useAccess()
   const canCreate = can(PERMISSIONS.TASK_CREATE) && canCreateAnywhere
   const canManageGroups = can(PERMISSIONS.STATUS_MANAGE) && Boolean(onRemoveGroup)
 
@@ -568,7 +568,7 @@ export const BoardView = ({
                 key={task.id}
                 task={task}
                 columns={columns}
-                draggable={canMove && canEditTask(task)}
+                draggable={canMove && canMoveTask(task)}
                 isDragging={drag?.task.id === task.id}
                 isSettling={settledId === task.id}
                 onOpen={openTask}

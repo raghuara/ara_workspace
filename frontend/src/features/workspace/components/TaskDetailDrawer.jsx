@@ -32,7 +32,7 @@ import { TaskAttachments } from './TaskAttachments'
 import { TaskDescription } from './TaskDescription'
 import { CommentComposer, CommentThread } from './TaskComments'
 import { colors } from '@/theme/tokens'
-import { formatDate, formatRelativeDay } from '@/utils/date'
+import { formatDate, formatRelativeDay, formatStamp } from '@/utils/date'
 
 const EMPLOYEE_TYPE_ID = 3
 
@@ -175,7 +175,7 @@ const ActivityTimeline = ({ history }) => (
               </Typography>
             ) : null}
             <Typography variant="caption" component="p" sx={{ mt: 0.25 }}>
-              {entry.at.replace('T', ' ').slice(0, 16)}
+              {formatStamp(entry.at)}
             </Typography>
           </Box>
         </Box>
@@ -187,7 +187,7 @@ const ActivityTimeline = ({ history }) => (
 export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
   const { columns } = useWorkspace()
   const { can } = usePermissions()
-  const { canEditTask, isAdmin } = useAccess()
+  const { canEditTask, canMoveTask, isAdmin } = useAccess()
   const { user, userType } = useSession()
   const [tab, setTab] = useState('comments')
   const bodyRef = useRef(null)
@@ -311,7 +311,7 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
           </Stack>
         ) : null}
 
-        {editable && can(PERMISSIONS.TASK_MOVE) ? (
+        {canMoveTask(task) && can(PERMISSIONS.TASK_MOVE) ? (
           <TextField
             select
             size="small"

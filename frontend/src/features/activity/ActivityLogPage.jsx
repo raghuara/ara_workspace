@@ -24,6 +24,7 @@ import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
+import { formatStamp } from '@/utils/date'
 import { pluralize } from '@/utils/format'
 
 const ACTION_TONES = {
@@ -206,7 +207,7 @@ export const ActivityLogPage = () => {
                   </Box>
 
                   <Typography variant="caption" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-                    {entry.at.replace('T', ' ').slice(0, 16)}
+                    {formatStamp(entry.at)}
                   </Typography>
                 </Stack>
               ))}

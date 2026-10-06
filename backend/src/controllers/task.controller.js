@@ -432,7 +432,6 @@ const moveTask = async (req, res) => {
   if (!existing) return notFound(res);
   if (!(await ensureWorkspaceAccess(req, res, existing.workspaceId))) return;
   if (!(await canAccessTask(req, existing))) return outsideScope(res);
-  if (!(await canAccessTask(req, existing, { write: true }))) return viewOnly(res);
 
   const statusId = text(req.body.statusId);
   const to = statusId ? await workspaceModel.findColumnById(statusId) : null;

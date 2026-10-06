@@ -86,3 +86,17 @@ export const formatDateTime = (value) => {
   if (!date || Number.isNaN(date.getTime())) return '—'
   return date.toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' })
 }
+
+export const formatClock = (value) => {
+  const match = /(\d{1,2}):(\d{2})/.exec(value ?? '')
+  if (!match) return '—'
+  const hours = Number(match[1])
+  const hour12 = hours % 12 === 0 ? 12 : hours % 12
+  return `${String(hour12).padStart(2, '0')}:${match[2]} ${hours >= 12 ? 'pm' : 'am'}`
+}
+
+export const formatStamp = (value) => {
+  if (!value) return '—'
+  const date = String(value).slice(0, 10)
+  return /\d{1,2}:\d{2}/.test(value) ? `${date} ${formatClock(value)}` : date
+}

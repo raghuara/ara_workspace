@@ -33,6 +33,7 @@ import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
+import { ROW_ACTION_CLASS, listRowSx } from '@/theme/rowSx'
 import { DEFAULT_FISCAL_START, MONTH_NAMES, endMonthOf } from '@/utils/fiscalYear'
 
 const FISCAL_START_OPTIONS = MONTH_NAMES.map((name, index) => ({
@@ -55,7 +56,29 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
     Object.fromEntries(fields.map((field) => [field.name, field.initial ?? ''])),
   )
   const [error, setError] = useState('')
+  const [invalid, setInvalid] = useState(null)
   const [saving, setSaving] = useState(false)
+
+  const fieldNameFor = (key) =>
+    fields.find((field) => field.name === key || `${field.name}s` === key || field.name === `${key}s`)?.name ?? ''
+
+  const change = (name, next) => {
+    setValues((current) => {
+      const updated = { ...current, [name]: next }
+      fields.forEach((field) => {
+        if (field.excludes === name && Array.isArray(updated[field.name])) {
+          updated[field.name] = updated[field.name].filter((id) => id !== next)
+        }
+      })
+      return updated
+    })
+    if (invalid?.name === name) setInvalid(null)
+  }
+
+  const optionsFor = (field) => {
+    const excluded = field.excludes ? values[field.excludes] : null
+    return excluded ? field.people.filter((option) => option.id !== excluded) : field.people
+  }
 
   const submit = async (event) => {
     event.preventDefault()
@@ -67,13 +90,18 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
     )
     if (missing) {
       setError(`${missing.label} is required.`)
+      setInvalid({ name: missing.name, message: `${missing.label} is required.` })
       return
     }
+    setInvalid(null)
     setSaving(true)
     try {
       await onSubmit(values)
       onClose()
     } catch (caught) {
+      const [key, message] = Object.entries(caught.details ?? {})[0] ?? []
+      const target = key ? fieldNameFor(key) : ''
+      if (target) setInvalid({ name: target, message })
       setError(caught.message ?? 'That could not be saved.')
     } finally {
       setSaving(false)
@@ -105,12 +133,13 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
                 <PeoplePicker
                   key={field.name}
                   label={field.label}
-                  options={field.people}
+                  options={optionsFor(field)}
                   multiple={Boolean(field.multiple)}
                   value={values[field.name]}
-                  onChange={(next) => setValues((c) => ({ ...c, [field.name]: next }))}
+                  onChange={(next) => change(field.name, next)}
                   required={field.required}
-                  helperText={field.helperText}
+                  error={invalid?.name === field.name}
+                  helperText={invalid?.name === field.name ? invalid.message : field.helperText}
                   disabledReason={field.disabledReason}
                 />
               ) : (
@@ -118,14 +147,15 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
                   key={field.name}
                   label={field.label}
                   value={values[field.name]}
-                  onChange={(event) => setValues((c) => ({ ...c, [field.name]: event.target.value }))}
+                  onChange={(event) => change(field.name, event.target.value)}
                   size="small"
                   fullWidth
                   required={field.required}
                   select={Boolean(field.options)}
                   multiline={field.multiline}
                   minRows={field.multiline ? 2 : undefined}
-                  helperText={field.helperText}
+                  error={invalid?.name === field.name}
+                  helperText={invalid?.name === field.name ? invalid.message : field.helperText}
                   slotProps={{
                     select: {
                       multiple: Boolean(field.multiple),
@@ -313,11 +343,11 @@ export const WorkspaceAdminPage = () => {
                       },
                     ],
                     onSubmit: async (values) => {
-                      await workspaceService.createWorkspace({
+                      const created = await workspaceService.createWorkspace({
                         ...values,
                         adminIds: values.adminId ? [values.adminId] : [],
                       })
-                      await refreshWorkspaces()
+                      await refreshWorkspaces(created?.id)
                     },
                   })
                 }
@@ -468,9 +498,10 @@ export const WorkspaceAdminPage = () => {
                               name: 'memberIds',
                               label: 'Members',
                               people: peopleOptions,
+                              excludes: 'leadId',
                               multiple: true,
                               initial: [],
-                              helperText: 'Tick everyone on this team. Members join the workspace automatically.',
+                              helperText: 'Tick everyone on this team. The lead is included automatically.',
                             },
                           ],
                           onSubmit: async (values) => {
@@ -514,8 +545,7 @@ export const WorkspaceAdminPage = () => {
                         alignItems: { xs: 'flex-start', sm: 'center' },
                         px: 2,
                         py: 1.25,
-                        borderBottom: `1px solid ${colors.border}`,
-                        '&:last-of-type': { borderBottom: 0 },
+                        ...listRowSx,
                       }}
                     >
                       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
@@ -537,6 +567,7 @@ export const WorkspaceAdminPage = () => {
                       {can(PERMISSIONS.TEAM_MANAGE) ? (
                         <Tooltip title="Edit team">
                           <IconButton
+                            className={ROW_ACTION_CLASS}
                             size="small"
                             aria-label={`Edit ${team.name}`}
                             onClick={() =>
@@ -555,8 +586,10 @@ export const WorkspaceAdminPage = () => {
                                     name: 'memberIds',
                                     label: 'Members',
                                     people: peopleOptions,
+                                    excludes: 'leadId',
                                     multiple: true,
-                                    initial: team.memberIds ?? [],
+                                    initial: (team.memberIds ?? []).filter((id) => id !== team.leadId),
+                                    helperText: 'The lead is included automatically.',
                                   },
                                 ],
                                 onSubmit: async (values) => {
@@ -619,8 +652,7 @@ export const WorkspaceAdminPage = () => {
                       alignItems: { xs: 'flex-start', sm: 'center' },
                       px: 2,
                       py: 1.25,
-                      borderBottom: `1px solid ${colors.border}`,
-                      '&:last-of-type': { borderBottom: 0 },
+                      ...listRowSx,
                     }}
                   >
                     <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', flex: 1, minWidth: 0 }}>
@@ -642,6 +674,7 @@ export const WorkspaceAdminPage = () => {
                         <ToneChip label={summary.label} tone={summary.tone} />
                         {can(PERMISSIONS.WORKSPACE_UPDATE) ? (
                           <Button
+                            className={ROW_ACTION_CLASS}
                             size="small"
                             variant="outlined"
                             startIcon={<KeyRound size={14} strokeWidth={1.75} />}

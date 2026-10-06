@@ -30,11 +30,11 @@ const replaceGrants = async (workspaceId, employeeId, grants, connection = pool)
   }
 };
 
-const upsertGrant = async ({ workspaceId, employeeId, scopeType, scopeId = "", level }, connection = pool) => {
+const grantIfMissing = async ({ workspaceId, employeeId, scopeType, scopeId = "", level }, connection = pool) => {
   await connection.query(
     `INSERT INTO workspace_access (workspace_id, employee_id, scope_type, scope_id, level)
      VALUES (?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE level = IF(level = 'edit', level, VALUES(level))`,
+     ON DUPLICATE KEY UPDATE level = level`,
     [workspaceId, employeeId, scopeType, scopeId, level]
   );
 };
@@ -62,7 +62,7 @@ module.exports = {
   findGrants,
   findGrantsForWorkspace,
   replaceGrants,
-  upsertGrant,
+  grantIfMissing,
   isWorkspaceAdmin,
   findTeamGroupMap
 };
