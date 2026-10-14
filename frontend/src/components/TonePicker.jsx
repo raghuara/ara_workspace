@@ -12,7 +12,7 @@ const TONE_LABELS = {
   green: 'Green',
   violet: 'Violet',
   teal: 'Teal',
-  gray: 'Gray',
+  gray: 'Gray', 
   orange: 'Orange',
   pink: 'Pink',
 }
