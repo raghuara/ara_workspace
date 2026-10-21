@@ -64,7 +64,10 @@ const findClients = async ({ workspaceId, workspaceIds, search, status, page, pa
 
 const findClientOptions = async (workspaceId, workspaceIds = null) => {
   const { where, params } = buildFilters({ workspaceId, workspaceIds });
-  const [rows] = await pool.query(`SELECT id, name, tone FROM clients c ${where} ORDER BY c.name`, params);
+  const [rows] = await pool.query(
+    `SELECT id, name, tone, company, status FROM clients c ${where} ORDER BY c.name`,
+    params
+  );
   return rows;
 };
 

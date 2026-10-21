@@ -8,6 +8,7 @@ const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
 const { PRIORITIES, TASK_SIZES, USER_TYPE } = require("../constants/workspace");
 const { periodFrom } = require("../utils/period");
+const { broadcastFrom: broadcast } = require("../utils/realtime");
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TABS = ["today", "scheduled", "overdue", "all"];
@@ -353,11 +354,15 @@ const createTask = async (req, res) => {
         connection
       );
     }
+
     return id;
   });
 
+  broadcast(req, workspaceId, "tasks", "created");
+
   res.status(201).json(await loadOne(taskId));
 };
+
 
 const updateTask = async (req, res) => {
   const existing = await loadOne(req.params.taskId);
@@ -424,6 +429,8 @@ const updateTask = async (req, res) => {
     }
   });
 
+  broadcast(req, existing.workspaceId, "tasks", "updated");
+
   res.json(await loadOne(existing.id));
 };
 
@@ -473,6 +480,8 @@ const moveTask = async (req, res) => {
     );
   });
 
+  broadcast(req, existing.workspaceId, "tasks", "moved");
+
   res.json(await loadOne(existing.id));
 };
 
@@ -494,6 +503,8 @@ const deleteTask = async (req, res) => {
     );
     await taskModel.deleteTask(existing.id, connection);
   });
+
+  broadcast(req, existing.workspaceId, "tasks", "deleted");
 
   res.json({ id: existing.id });
 };
@@ -622,7 +633,11 @@ const createComment = async (req, res) => {
     return id;
   });
 
-  res.status(201).json(mapComment(await commentModel.findCommentById(commentId)));
+  broadcast(req, task.workspaceId, "comments", "created", { taskId: task.id });
+  
+  res.status(201).json(
+    mapComment(await commentModel.findCommentById(commentId))
+  );
 };
 
 const updateComment = async (req, res) => {
@@ -650,7 +665,11 @@ const updateComment = async (req, res) => {
       );
     });
   }
-  res.json(mapComment(await commentModel.findCommentById(comment.id)));
+  broadcast(req, task.workspaceId, "comments", "updated", { taskId: task.id });
+  
+  res.json(
+    mapComment(await commentModel.findCommentById(comment.id))
+  );
 };
 
 const deleteComment = async (req, res) => {
@@ -675,6 +694,9 @@ const deleteComment = async (req, res) => {
       connection
     );
   });
+
+  broadcast(req, task.workspaceId, "comments", "deleted", { taskId: task.id });
+
   res.json({ id: comment.id });
 };
 

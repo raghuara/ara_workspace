@@ -31,6 +31,7 @@ const WorkspacePage = lazyPage(() => import('@/features/workspace/WorkspacePage'
 const WorkloadPage = lazyPage(() => import('@/features/workspace/WorkloadPage'), 'WorkloadPage')
 const RecurringTasksPage = lazyPage(() => import('@/features/workspace/RecurringTasksPage'), 'RecurringTasksPage')
 const ClientsPage = lazyPage(() => import('@/features/clients/ClientsPage'), 'ClientsPage')
+const ClientDeskPage = lazyPage(() => import('@/features/clientdesk/ClientDeskPage'), 'ClientDeskPage')
 const ActivityLogPage = lazyPage(() => import('@/features/activity/ActivityLogPage'), 'ActivityLogPage')
 const UserTypesPage = lazyPage(() => import('@/features/admin/UserTypesPage'), 'UserTypesPage')
 const DepartmentsPage = lazyPage(() => import('@/features/admin/DepartmentsPage'), 'DepartmentsPage')
@@ -146,6 +147,13 @@ export const AppRoutes = () => (
               permission: PERMISSIONS.CLIENT_VIEW,
               feature: FEATURES.CLIENTS,
               title: 'Clients',
+            })}
+          />
+          <Route
+            path={ROUTES.clientDesk}
+            element={guarded(<ClientDeskPage />, {
+              permission: PERMISSIONS.TICKET_VIEW,
+              title: 'Client Desk',
             })}
           />
           <Route

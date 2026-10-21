@@ -23,6 +23,15 @@ const errorHandler = (error, req, res, next) => {
   }
 
   console.error(error);
+
+  if (error.code === "ER_NO_SUCH_TABLE") {
+    const table = /Table '[^.']*\.?([^.']+)' doesn't exist/.exec(error.sqlMessage || "")?.[1] ?? "one it needs";
+    return res.status(500).json({
+      message: `The database is missing the table "${table}". Run the pending migrations, then try again.`,
+      code: "MIGRATION_PENDING"
+    });
+  }
+
   res.status(500).json({ message: "Unexpected server error.", code: "INTERNAL" });
 };
 

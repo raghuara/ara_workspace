@@ -25,6 +25,11 @@ export const PERMISSIONS = {
   CLIENT_UPDATE: 'client.update',
   CLIENT_DELETE: 'client.delete',
 
+  // Client Desk
+  TICKET_VIEW: 'ticket.view',
+  TICKET_MANAGE: 'ticket.manage',
+  TICKET_MANAGE_ALL: 'ticket.manage.all',
+
   // People
   EMPLOYEE_VIEW: 'employee.view',
   EMPLOYEE_UPDATE: 'employee.update',
@@ -89,6 +94,22 @@ export const PERMISSION_CATALOG = [
       { key: PERMISSIONS.CLIENT_CREATE, label: 'Add clients' },
       { key: PERMISSIONS.CLIENT_UPDATE, label: 'Edit clients' },
       { key: PERMISSIONS.CLIENT_DELETE, label: 'Delete clients' },
+    ],
+  },
+  {
+    key: 'clientdesk',
+    label: 'Client Desk',
+    description: 'Complaints, requirements and changes collected from clients',
+    permissions: [
+      { key: PERMISSIONS.TICKET_VIEW, label: 'Open Client Desk' },
+      {
+        key: PERMISSIONS.TICKET_MANAGE,
+        label: 'Raise and work tickets — only for the clients assigned to them',
+      },
+      {
+        key: PERMISSIONS.TICKET_MANAGE_ALL,
+        label: 'Raise and work tickets — for every client in the workspace',
+      },
     ],
   },
   {

@@ -31,7 +31,7 @@ export const EmployeeInsights = ({ insights, yearLabel }) => (
     sx={{
       display: 'grid',
       gap: 1.5,
-      gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)' },
+      gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)' },
     }}
   >
     <SectionCard

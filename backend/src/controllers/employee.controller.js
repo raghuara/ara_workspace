@@ -6,6 +6,7 @@ const { USER_TYPE } = require("../constants/workspace");
 const isMasterAdmin = (req) => req.user.userTypeId === USER_TYPE.MASTER_ADMIN;
 const allowedWorkspaceIds = async (req) => (isMasterAdmin(req) ? null : workspaceModel.findWorkspaceIdsForEmployee(req.user.employeeId));
 const { EMPLOYMENT_STATUSES, EMPLOYMENT_TYPES, WORK_LOCATIONS } = require("../constants/employee");
+const { broadcastFrom: broadcast } = require("../utils/realtime");
 
 const DEFAULT_PAGE_SIZE = 10;
 const MAX_PAGE_SIZE = 100;
@@ -178,6 +179,7 @@ const createEmployee = async (req, res) => {
   try {
     const employeeId = await employeeModel.nextEmployeeId();
     const created = await employeeModel.createEmployee({ ...data, employeeId });
+    broadcast(req, data.workspaceId, "employees", "created");
     return res.status(201).json(mapEmployee(created));
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") return duplicateEmail(res);
@@ -204,6 +206,7 @@ const updateEmployee = async (req, res) => {
 
   try {
     const updated = await employeeModel.updateEmployee(employeeId, data);
+    broadcast(req, existing.workspace_id, "employees", "updated");
     return res.json(mapEmployee(updated));
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") return duplicateEmail(res);

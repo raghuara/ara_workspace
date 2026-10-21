@@ -24,14 +24,17 @@ import { TaskDetailDrawer } from '@/features/workspace/components/TaskDetailDraw
 import { TaskFormDialog } from '@/features/workspace/components/TaskFormDialog'
 import { taskService } from '@/api/taskService'
 import { workspaceViewPath } from '@/constants/routes'
+import { PERMISSIONS } from '@/constants/permissions'
 import { PRIORITY_TONES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useSession } from '@/hooks/useSession'
 import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
+import { usePermissions } from '@/hooks/usePermissions'
 import { colors } from '@/theme/tokens'
 import { daysUntil, formatDate, formatLongDate, parseIsoDate } from '@/utils/date'
 import { MONTH_NAMES, monthRange } from '@/utils/fiscalYear'
+import { ClientDeskSummaryCard } from './ClientDeskSummaryCard'
 import { EmployeeInsights } from './EmployeeInsights'
 import { buildInsights } from './employeeInsightsData'
 
@@ -211,7 +214,7 @@ const HeroBanner = ({
         position: 'relative',
         overflow: 'hidden',
         display: 'grid',
-        gridTemplateColumns: { xs: '1fr', md: 'minmax(0, 1fr) auto' },
+        gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1fr) auto' },
         gap: { xs: 1.5, md: 2.5 },
         alignItems: 'center',
         px: { xs: 2, md: 2.5 },
@@ -722,6 +725,7 @@ const WeekDay = ({ day, selected, onClick }) => {
 export const EmployeeDashboard = () => {
   const { user } = useSession()
   const { activeWorkspace, activeWorkspaceId } = useWorkspace()
+  const { can } = usePermissions()
   const { yearRange, yearLabel, isCurrentYear, months } = usePeriod()
   const board = useAsync(taskService.getBoard, [activeWorkspaceId, yearRange], { enabled: Boolean(activeWorkspaceId) })
 
@@ -850,7 +854,7 @@ export const EmployeeDashboard = () => {
           <Stack spacing={GAP}>
             <Skeleton variant="rounded" height={156} sx={{ borderRadius: 3 }} />
             <Box
-              sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' } }}
+              sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}
             >
               {[0, 1, 2, 3].map((index) => (
                 <StatTileSkeleton key={index} />
@@ -860,7 +864,7 @@ export const EmployeeDashboard = () => {
               sx={{
                 display: 'grid',
                 gap: GAP,
-                gridTemplateColumns: { xs: '1fr', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)' },
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)' },
               }}
             >
               <ChartSectionSkeleton bars={6} height={150} />
@@ -871,7 +875,7 @@ export const EmployeeDashboard = () => {
               sx={{
                 display: 'grid',
                 gap: GAP,
-                gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.75fr) minmax(320px, 1fr)' },
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.75fr) minmax(320px, 1fr)' },
                 alignItems: 'start',
               }}
             >
@@ -898,7 +902,7 @@ export const EmployeeDashboard = () => {
             />
 
             <Box
-              sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' } }}
+              sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}
             >
               {tiles.map((tile) => (
                 <TileButton
@@ -926,7 +930,7 @@ export const EmployeeDashboard = () => {
               sx={{
                 display: 'grid',
                 gap: GAP,
-                gridTemplateColumns: { xs: '1fr', lg: 'minmax(0, 1.75fr) minmax(320px, 1fr)' },
+                gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1.75fr) minmax(320px, 1fr)' },
                 alignItems: 'start',
               }}
             >
@@ -1034,6 +1038,10 @@ export const EmployeeDashboard = () => {
               </Box>
 
               <Stack spacing={GAP} sx={{ minWidth: 0 }}>
+                {can(PERMISSIONS.TICKET_VIEW) && activeWorkspaceId ? (
+                  <ClientDeskSummaryCard workspaceId={activeWorkspaceId} />
+                ) : null}
+
                 <SectionCard title="This week" description={`${weekLabel} · tasks due each day`} accent="amber">
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 0.5 }}>
                     {week.map((day) => (

@@ -27,6 +27,7 @@ import { colors } from '@/theme/tokens'
 import { formatLongDate, formatRelativeDay, toIsoDate } from '@/utils/date'
 import { RecentActivityTable } from './RecentActivityTable'
 import { TeamsTable } from './TeamsTable'
+import { ClientDeskSummaryCard } from './ClientDeskSummaryCard'
 import { WorkspaceSummaryCard } from './WorkspaceSummaryCard'
 
 const GAP = 1.5
@@ -92,7 +93,7 @@ export const WorkspaceDashboard = () => {
           <DashboardSkeleton />
         ) : (
           <Stack spacing={GAP}>
-            <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)', lg: 'repeat(4, 1fr)' } }}>
+            <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(4, minmax(0, 1fr))' } }}>
               <StatCard label="My open tasks" value={stats.mine} icon={ClipboardList} tone="blue" />
               <StatCard label="Due today" value={stats.dueToday} icon={Clock3} tone="violet" />
               <StatCard
@@ -113,7 +114,7 @@ export const WorkspaceDashboard = () => {
               />
             </Box>
 
-            <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: '1fr', md: 'repeat(2, 1fr)', lg: '1.6fr 1fr 1fr' } }}>
+            <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))', lg: 'minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1fr)' } }}>
               <SectionCard
                 title="Tasks by status"
                 description="Everything on the board right now"
@@ -158,7 +159,7 @@ export const WorkspaceDashboard = () => {
             </Box>
 
             {mine ? (
-              <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: '1fr', lg: '1fr 1.7fr' } }}>
+              <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) minmax(0, 1.7fr)' } }}>
                 <WorkspaceSummaryCard workspace={mine} compact />
 
                 <TeamsTable
@@ -169,7 +170,7 @@ export const WorkspaceDashboard = () => {
               </Box>
             ) : null}
 
-            <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: '1fr', lg: '1fr 1.6fr' } }}>
+            <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) minmax(0, 1.6fr)' } }}>
               <SectionCard
                 title="My tasks"
                 description="Assigned to you, soonest first"
@@ -212,7 +213,10 @@ export const WorkspaceDashboard = () => {
                 )}
               </SectionCard>
 
-              <RecentActivityTable workspaceId={activeWorkspaceId} range={yearRange} canView={can(PERMISSIONS.ACTIVITY_VIEW) && isEnabled(FEATURES.ACTIVITY_LOG)} />
+              <Stack spacing={GAP} sx={{ minWidth: 0 }}>
+                {can(PERMISSIONS.TICKET_VIEW) ? <ClientDeskSummaryCard workspaceId={activeWorkspaceId} /> : null}
+                <RecentActivityTable workspaceId={activeWorkspaceId} range={yearRange} canView={can(PERMISSIONS.ACTIVITY_VIEW) && isEnabled(FEATURES.ACTIVITY_LOG)} />
+              </Stack>
             </Box>
           </Stack>
         )}

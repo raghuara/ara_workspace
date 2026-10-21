@@ -5,6 +5,7 @@ const workspaceModel = require("../models/workspace.model");
 const adminModel = require("../models/admin.model");
 const accountModel = require("../models/account.model");
 const { PASSWORD_PATTERN, PASSWORD_RULE } = require("./account.controller");
+const { effectivePermissions } = require("../services/permissions.service");
 
 const TOKEN_EXPIRES_IN = "8h";
 
@@ -29,9 +30,10 @@ const buildSession = async (user) => ({
     id: user.user_type_slug,
     name: user.user_type_name
   },
-  permissions: Array.isArray(user.permissions)
-    ? user.permissions
-    : JSON.parse(user.permissions),
+  permissions: await effectivePermissions(
+    Array.isArray(user.permissions) ? user.permissions : JSON.parse(user.permissions),
+    user.employee_id
+  ),
   workspaceIds: await workspaceModel.findWorkspaceIdsForEmployee(user.employee_id),
   mustChangePassword: Boolean(user.must_change_password),
   features: await adminModel.findFeatures()

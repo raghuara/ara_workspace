@@ -1,4 +1,4 @@
-import { Building2, TrendingUp, History, LayoutDashboard, Settings2, ShieldCheck, Users } from 'lucide-react'
+import { Building2, Headset, TrendingUp, History, LayoutDashboard, Settings2, ShieldCheck, Users } from 'lucide-react'
 import { PERMISSIONS } from './permissions'
 import { FEATURES } from './features'
 import { ROUTES } from './routes'
@@ -24,6 +24,13 @@ export const NAVIGATION = [
         icon: Building2,
         permission: PERMISSIONS.CLIENT_VIEW,
         feature: FEATURES.CLIENTS,
+      },
+      {
+        key: 'clientdesk',
+        label: 'Client Desk',
+        to: ROUTES.clientDesk,
+        icon: Headset,
+        permission: PERMISSIONS.TICKET_VIEW,
       },
       {
         key: 'employees',

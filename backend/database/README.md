@@ -32,6 +32,23 @@ node database/seed_admin.js
 
 Edit the `ADMIN` block in that file first (employee id, email, password). The employee must exist in `employees`.
 
+## Running migrations
+
+Every change to the database is a numbered file in `migrations/`. A small runner keeps track of
+which ones a database has already had, so nothing is run twice and nothing is missed.
+
+```
+node database/migrate.js status          # what is applied, what is pending
+node database/migrate.js up               # run everything pending, in order
+node database/migrate.js baseline 20      # mark 01-20 as applied WITHOUT running them
+```
+
+It reads the same database settings the app uses, so it works against whichever database those
+settings point at. Each file runs inside a transaction; if one fails, nothing after it is run.
+
+On a database where the files were already applied by hand, run `baseline <last applied number>`
+once, then use `up` from then on.
+
 ## Recovery
 
 Lost the last admin password:

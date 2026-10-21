@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const userModel = require("../models/user.model");
+const { effectivePermissions } = require("../services/permissions.service");
 
 // Runs before a protected route. Reads the token from the
 // "Authorization: Bearer <token>" header, verifies it, and attaches the
@@ -39,9 +40,10 @@ const checkPermissions = (isAllowed) => async (req, res, next) => {
     });
   }
 
-  const granted = Array.isArray(user.permissions)
-    ? user.permissions
-    : JSON.parse(user.permissions);
+  const granted = await effectivePermissions(
+    Array.isArray(user.permissions) ? user.permissions : JSON.parse(user.permissions),
+    user.employee_id
+  );
 
   if (!isAllowed(granted)) {
     return res.status(403).json({

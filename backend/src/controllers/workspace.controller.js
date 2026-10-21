@@ -192,6 +192,7 @@ const createWorkspace = async (req, res) => {
   });
 
   const created = await workspaceModel.findWorkspaceById(workspaceId);
+  await refreshRoomsFrom(req, [req.user.employeeId, ...adminIds]);
   res.status(201).json(mapWorkspace(created, adminIds));
 };
 
@@ -246,7 +247,10 @@ const updateWorkspace = async (req, res) => {
   });
 
   const updated = await workspaceModel.findWorkspaceById(workspace.id);
-  res.json(mapWorkspace(updated, await workspaceModel.findAdminIds(workspace.id)));
+  const admins = await workspaceModel.findAdminIds(workspace.id);
+  broadcast(req, workspace.id, "workspace", "updated");
+  await refreshRoomsFrom(req, admins);
+  res.json(mapWorkspace(updated, admins));
 };
 
 const deleteWorkspace = async (req, res) => {
@@ -254,6 +258,7 @@ const deleteWorkspace = async (req, res) => {
   if (!workspace) return;
 
   await withTransaction((connection) => workspaceModel.deleteWorkspace(workspace.id, connection));
+  broadcast(req, workspace.id, "workspace", "deleted");
   res.json({ id: workspace.id });
 };
 
@@ -334,6 +339,7 @@ const createGroup = async (req, res) => {
     await accessModel.grantIfMissing({ workspaceId: workspace.id, employeeId: leadId, scopeType: "group", scopeId: id, level: "edit" });
   }
 
+  broadcast(req, workspace.id, "structure", "created");
   res.status(201).json(mapGroup(await workspaceModel.findGroupById(id)));
 };
 
@@ -362,6 +368,7 @@ const updateGroup = async (req, res) => {
     await accessModel.grantIfMissing({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "group", scopeId: group.id, level: "edit" });
   }
 
+  broadcast(req, group.workspace_id, "structure", "updated");
   res.json(mapGroup(await workspaceModel.findGroupById(group.id)));
 };
 
@@ -375,6 +382,7 @@ const deleteGroup = async (req, res) => {
   }
 
   await workspaceModel.deleteGroup(group.id);
+  broadcast(req, group.workspace_id, "structure", "deleted");
   res.json({ id: group.id });
 };
 
@@ -426,6 +434,8 @@ const saveTeam = async (req, res, { group, existing }) => {
   });
 
   const saved = await workspaceModel.findTeamById(teamId);
+  broadcast(req, group.workspace_id, "structure", existing ? "updated" : "created");
+  await refreshRoomsFrom(req, [...memberIds, leadId]);
   return res.status(existing ? 200 : 201).json(mapTeam(saved, await workspaceModel.findTeamMemberIds(teamId)));
 };
 
@@ -452,6 +462,7 @@ const deleteTeam = async (req, res) => {
   if (!(await loadAccessibleWorkspace(req, res, team.workspace_id))) return;
 
   await workspaceModel.deleteTeam(team.id);
+  broadcast(req, team.workspace_id, "structure", "deleted");
   res.json({ id: team.id });
 };
 
@@ -500,6 +511,7 @@ const createColumns = async (req, res) => {
   });
 
   const columns = await workspaceModel.findColumns(workspace.id);
+  broadcast(req, workspace.id, "columns", "created");
   res.status(201).json(columns.filter((column) => ids.includes(column.id)).map(mapColumn));
 };
 
@@ -525,6 +537,7 @@ const updateColumn = async (req, res) => {
     wipLimit
   });
 
+  broadcast(req, column.workspace_id, "columns", "updated");
   res.json(mapColumn(await workspaceModel.findColumnById(column.id)));
 };
 
@@ -550,6 +563,7 @@ const deleteColumn = async (req, res) => {
   }
 
   await workspaceModel.deleteColumn(column.id);
+  broadcast(req, column.workspace_id, "columns", "deleted");
   res.json({ id: column.id });
 };
 
@@ -573,6 +587,8 @@ const addMember = async (req, res) => {
   });
 
   const members = await workspaceModel.findMembers(workspace.id);
+  broadcast(req, workspace.id, "members", "added");
+  await refreshRoomsFrom(req, [employeeId]);
   res.status(201).json(mapMember(members.find((member) => member.employee_id === employeeId)));
 };
 
@@ -613,6 +629,8 @@ const updateMemberAccess = async (req, res) => {
   await accessModel.replaceGrants(workspace.id, employeeId, grants);
 
   const member = (await workspaceModel.findMembers(workspace.id)).find((row) => row.employee_id === employeeId);
+  broadcast(req, workspace.id, "members", "updated");
+  await refreshRoomsFrom(req, [employeeId]);
   res.json({ ...mapMember(member), grants: mapGrants(await accessModel.findGrants(workspace.id, employeeId)) });
 };
 
@@ -625,6 +643,8 @@ const removeMember = async (req, res) => {
   }
 
   await workspaceModel.removeMember(workspace.id, req.params.employeeId);
+  broadcast(req, workspace.id, "members", "removed");
+  await refreshRoomsFrom(req, [req.params.employeeId]);
   res.status(204).end();
 };
 

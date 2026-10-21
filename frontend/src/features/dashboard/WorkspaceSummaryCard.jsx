@@ -1,5 +1,5 @@
 import { Box, Button, Divider, Stack, Typography } from '@mui/material'
-import { ArrowRight, Layers, Users, UsersRound } from 'lucide-react'
+import { ArrowRight, Info, Layers, Users, UsersRound } from 'lucide-react'
 import { ColumnChart, HorizontalBars } from '@/components/charts/BarChart'
 import { MetricTile } from '@/components/MetricTile'
 import { ToneChip } from '@/components/ToneChip'
@@ -11,7 +11,7 @@ import { StatusSplitBar } from './StatusSplitBar'
  * One workspace, rolled up. `compact` drops the charts so the master view can
  * line several up; the full form is what an admin sees for their own workspace.
  */
-export const WorkspaceSummaryCard = ({ workspace, compact = false, onOpen }) => {
+export const WorkspaceSummaryCard = ({ workspace, compact = false, onOpen, onDetails }) => {
   const tone = STATUS_TONES[workspace.tone] ?? STATUS_TONES.blue
 
   return (
@@ -22,6 +22,7 @@ export const WorkspaceSummaryCard = ({ workspace, compact = false, onOpen }) => 
         borderRadius: 2.5,
         overflow: 'hidden',
         height: '100%',
+        minWidth: 0,
         display: 'flex',
         flexDirection: 'column',
       }}
@@ -97,7 +98,7 @@ export const WorkspaceSummaryCard = ({ workspace, compact = false, onOpen }) => 
         {compact ? null : (
           <>
             <Divider sx={{ mb: 1.5 }} />
-            <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: '1fr', lg: '1fr 1fr' } }}>
+            <Box sx={{ display: 'grid', gap: 2.5, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) minmax(0, 1fr)' } }}>
               <Box>
                 <Typography variant="subtitle2" component="p" sx={{ mb: 1.25 }}>
                   Tasks by status
@@ -132,11 +133,18 @@ export const WorkspaceSummaryCard = ({ workspace, compact = false, onOpen }) => 
         )}
       </Box>
 
-      {onOpen ? (
-        <Stack direction="row" sx={{ px: 1.75, py: 1, borderTop: `1px solid ${colors.border}`, justifyContent: 'flex-end' }}>
-          <Button size="small" variant="contained" onClick={() => onOpen(workspace.id)} endIcon={<ArrowRight size={14} strokeWidth={2} />}>
-            Open board
-          </Button>
+      {onOpen || onDetails ? (
+        <Stack direction="row" spacing={1} sx={{ px: 1.75, py: 1, borderTop: `1px solid ${colors.border}`, justifyContent: 'flex-end' }}>
+          {onDetails ? (
+            <Button size="small" variant="outlined" onClick={() => onDetails(workspace.id)} startIcon={<Info size={14} strokeWidth={2} />}>
+              Details
+            </Button>
+          ) : null}
+          {onOpen ? (
+            <Button size="small" variant="contained" onClick={() => onOpen(workspace.id)} endIcon={<ArrowRight size={14} strokeWidth={2} />}>
+              Open board
+            </Button>
+          ) : null}
         </Stack>
       ) : null}
     </Box>

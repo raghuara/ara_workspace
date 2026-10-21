@@ -7,7 +7,7 @@ the shape of the REST endpoints you will implement in Node.js.
 
 ```bash
 npm install
-npm run dev      # http://localhost:5173
+npm run dev      # http://localhost:5003
 npm run build
 npm run lint
 ```

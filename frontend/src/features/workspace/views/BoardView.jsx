@@ -8,6 +8,7 @@ import { GroupMenu } from '../components/GroupMenu'
 import { QuickAddCard } from '../components/QuickAddCard'
 import { TaskCard } from '../components/TaskCard'
 import { taskService } from '@/api/taskService'
+import { pauseRealtime, resumeRealtime } from '@/api/realtimeGate'
 import { PERMISSIONS } from '@/constants/permissions'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 import { usePermissions } from '@/hooks/usePermissions'
@@ -157,6 +158,7 @@ export const BoardView = ({
       clearTimeout(pendingRef.current?.timer)
       detach(listenersRef.current)
       releaseBody()
+      resumeRealtime()
     },
     [],
   )
@@ -167,6 +169,7 @@ export const BoardView = ({
     detach(listenersRef.current)
     listenersRef.current = null
     releaseBody()
+    resumeRealtime()
     pendingRef.current = null
     dragRef.current = null
     targetRef.current = null
@@ -416,6 +419,7 @@ export const BoardView = ({
     setDrag(dragging)
 
     grabBody(pending.pointerType)
+    pauseRealtime()
     rafRef.current = requestAnimationFrame(autoScroll)
   }
 

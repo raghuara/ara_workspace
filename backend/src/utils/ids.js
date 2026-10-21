@@ -8,11 +8,13 @@ const TABLES = {
   CLI: "clients",
   TSK: "tasks",
   RCR: "recurring_tasks",
+  TKT: "client_tickets",
   PRV: "performance_reviews"
 };
 
 const PADDING = {
   TSK: 4,
+  TKT: 4,
   PRV: 4
 };
 

@@ -13,7 +13,7 @@ import {
   Typography,
 } from '@mui/material'
 import { ChevronDown, Columns3, Info, LayoutList, Plus, Repeat, Settings2, Table2 } from 'lucide-react'
-import { Link, Navigate, useNavigate, useParams } from 'react-router-dom'
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { PageHeader } from '@/components/PageHeader'
 import { MonthPicker } from '@/components/MonthPicker'
 import { QueryStateView } from '@/components/QueryStateView'
@@ -23,6 +23,7 @@ import { taskService } from '@/api/taskService'
 import { dashboardService } from '@/api/dashboardService'
 import { PERMISSIONS } from '@/constants/permissions'
 import { FEATURES } from '@/constants/features'
+import { TASK_TABS } from '@/constants/workspaceDomain'
 import { DEFAULT_VIEW, ROUTES, viewPathFor, workspaceViewPath } from '@/constants/routes'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -55,6 +56,23 @@ const EMPTY_FILTERS = {
   sizeKey: '',
 }
 
+const FILTER_KEYS = Object.keys(EMPTY_FILTERS)
+
+const filtersFromParams = (params) => {
+  const next = { ...EMPTY_FILTERS }
+  FILTER_KEYS.forEach((key) => {
+    const value = params.get(key)
+    if (value) next[key] = value
+  })
+  if (!TASK_TABS.some((tab) => tab.value === next.tab)) next.tab = EMPTY_FILTERS.tab
+  return next
+}
+
+const paramsFromFilters = (filters) =>
+  Object.fromEntries(
+    Object.entries(filters).filter(([key, value]) => value && value !== EMPTY_FILTERS[key]),
+  )
+
 const VIEW_TABS = [
   { value: 'board', label: 'Board', icon: Columns3, feature: FEATURES.BOARD_VIEW },
   { value: 'list', label: 'List', icon: LayoutList, feature: FEATURES.LIST_VIEW },
@@ -74,7 +92,13 @@ export const WorkspacePage = () => {
     [params.groupId, params.teamId],
   )
 
-  const [filters, setFilters] = useState(EMPTY_FILTERS)
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [filters, setFilters] = useState(() => filtersFromParams(searchParams))
+
+  const changeFilters = (next) => {
+    setFilters(next)
+    setSearchParams(paramsFromFilters(next), { replace: true })
+  }
   const [taskDialog, setTaskDialog] = useState({ open: false, task: null, statusId: null })
   const [groupDialogOpen, setGroupDialogOpen] = useState(false)
   const [removingGroup, setRemovingGroup] = useState(null)
@@ -288,8 +312,8 @@ export const WorkspacePage = () => {
 
       <TaskFilterBar
         filters={filters}
-        onChange={setFilters}
-        onReset={() => setFilters(EMPTY_FILTERS)}
+        onChange={changeFilters}
+        onReset={() => changeFilters(EMPTY_FILTERS)}
         hideGroup={Boolean(group)}
         hideTeam={Boolean(team)}
         teamScopeGroupId={group?.id}

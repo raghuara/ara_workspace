@@ -9,6 +9,7 @@ const employeeRoutes = require("./routes/employee.routes");
 const attachmentRoutes = require("./routes/attachment.routes");
 const workspaceRoutes = require("./routes/workspace.routes");
 const clientRoutes = require("./routes/client.routes");
+const ticketRoutes = require("./routes/ticket.routes");
 const taskRoutes = require("./routes/task.routes");
 const { departmentRoutes, designationRoutes } = require("./routes/catalog.routes");
 const adminRoutes = require("./routes/admin.routes");
@@ -26,22 +27,18 @@ app.set("trust proxy", 1);
 app.disable("x-powered-by");
 
 const allowedOrigins = [
-  "http://localhost:5173",
+  "http://localhost:5003",
   "http://localhost:5199",
   ...(process.env.CLIENT_URL || "").split(",").map((origin) => origin.trim()).filter(Boolean)
 ];
 
-const LAN_ORIGIN = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5173$/;
+const LAN_ORIGIN = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}):5003$/;
+
+const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin) || LAN_ORIGIN.test(origin);
 
 app.use(
   cors({
-    origin: (origin, callback) => {
-      if (!origin || allowedOrigins.includes(origin) || LAN_ORIGIN.test(origin)) {
-        callback(null, true);
-        return;
-      }
-      callback(null, false);
-    }
+    origin: (origin, callback) => callback(null, isAllowedOrigin(origin))
   })
 );
 
@@ -81,6 +78,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/employees", employeeRoutes);
 app.use("/api/attachments", attachmentRoutes);
 app.use("/api/clients", clientRoutes);
+app.use("/api/tickets", ticketRoutes);
 app.use("/api/departments", departmentRoutes);
 app.use("/api/designations", designationRoutes);
 app.use("/api/notifications", notificationRoutes);
@@ -104,5 +102,7 @@ if (isProduction && fs.existsSync(clientBuild)) {
 
 app.use(notFoundHandler);
 app.use(errorHandler);
+
+app.isAllowedOrigin = isAllowedOrigin;
 
 module.exports = app;

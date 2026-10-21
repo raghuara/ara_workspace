@@ -11,7 +11,8 @@ const URL_TTL_SECONDS = 15 * 60;
 // Which permission each owner type needs, for reading and for changing.
 const OWNER_TYPES = {
   employee: { view: "employee.view", update: "employee.update" },
-  task: { view: "task.view", update: "task.update" }
+  task: { view: "task.view", update: "task.update" },
+  ticket: { view: "ticket.view", update: "ticket.manage" }
 };
 
 const formatSize = (bytes) => {
@@ -58,7 +59,7 @@ const uploadAttachment = async (req, res) => {
   const file = req.file;
 
   if (!OWNER_TYPES[ownerType]) {
-    return res.status(400).json({ message: "ownerType must be employee or task.", code: "BAD_REQUEST" });
+    return res.status(400).json({ message: "ownerType must be employee, task or ticket.", code: "BAD_REQUEST" });
   }
   if (!ownerId) {
     return res.status(400).json({ message: "ownerId is required.", code: "BAD_REQUEST" });

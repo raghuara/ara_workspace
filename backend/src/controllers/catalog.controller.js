@@ -1,6 +1,7 @@
 const { withTransaction } = require("../utils/transaction");
 const { departmentModel, designationModel } = require("../models/catalog.model");
 const workspaceModel = require("../models/workspace.model");
+const { broadcastFrom: broadcast } = require("../utils/realtime");
 const { USER_TYPE } = require("../constants/workspace");
 
 const text = (value) => (typeof value === "string" ? value.trim() : "");
@@ -64,6 +65,7 @@ const createCatalogController = ({ model, singular, maxNameLength }) => {
         description: text(req.body.description).slice(0, 255) || null,
         isActive: req.body.isActive === undefined ? true : Boolean(req.body.isActive)
       });
+      broadcast(req, workspaceId, "catalog", "created");
       return res.status(201).json(map(await model.findById(id)));
     } catch (error) {
       if (error.code === "ER_DUP_ENTRY") return duplicate(res);
@@ -90,6 +92,7 @@ const createCatalogController = ({ model, singular, maxNameLength }) => {
         await model.update(existing.id, data, connection);
         if (name !== existing.name) await model.renameOnEmployees(existing.workspace_id, existing.name, name, connection);
       });
+      broadcast(req, existing.workspace_id, "catalog", "updated");
       return res.json(map(await model.findById(existing.id)));
     } catch (error) {
       if (error.code === "ER_DUP_ENTRY") return duplicate(res);
@@ -110,6 +113,7 @@ const createCatalogController = ({ model, singular, maxNameLength }) => {
     }
 
     await model.remove(existing.id);
+    broadcast(req, existing.workspace_id, "catalog", "deleted");
     res.json({ id: existing.id });
   };
 

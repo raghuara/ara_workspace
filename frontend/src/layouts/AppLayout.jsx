@@ -5,6 +5,7 @@ import { Header } from './Header'
 import { Sidebar } from './Sidebar'
 import { WorkspaceProvider } from '@/features/workspace/WorkspaceProvider'
 import { PeriodProvider } from '@/features/workspace/PeriodProvider'
+import { RealtimeSync } from '@/features/workspace/RealtimeSync'
 import { ChangePasswordDialog } from '@/features/auth/ChangePasswordDialog'
 import { useSession } from '@/hooks/useSession'
 import { colors, layout } from '@/theme/tokens'
@@ -15,6 +16,7 @@ export const AppLayout = () => {
 
   return (
     <WorkspaceProvider>
+      <RealtimeSync />
       <PeriodProvider>
         <Box
           sx={{

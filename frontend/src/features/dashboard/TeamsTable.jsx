@@ -34,7 +34,7 @@ const Count = ({ value, tone }) => (
   </Typography>
 )
 
-export const TeamsTable = ({ teams, showWorkspace = false, title = 'Teams', description, action, maxHeight = 440 }) => (
+export const TeamsTable = ({ teams, showWorkspace = false, title = 'Teams', description, action, maxHeight = 440, onSelectTeam }) => (
   <SectionCard title={title} description={description} action={action} accent="teal" padded={false}>
     {teams.length === 0 ? (
       <EmptyState icon={UsersRound} title="No teams yet" description="Teams appear here once groups have them." />
@@ -55,7 +55,12 @@ export const TeamsTable = ({ teams, showWorkspace = false, title = 'Teams', desc
           </TableHead>
           <TableBody>
             {teams.map((team) => (
-              <TableRow key={`${team.workspaceId ?? 'w'}-${team.id}`} hover>
+              <TableRow
+                key={`${team.workspaceId ?? 'w'}-${team.id}`}
+                hover
+                onClick={onSelectTeam ? () => onSelectTeam(team) : undefined}
+                sx={onSelectTeam ? { cursor: 'pointer' } : undefined}
+              >
                 <TableCell>
                   <Typography variant="body2" fontWeight={600} noWrap>
                     {team.name}

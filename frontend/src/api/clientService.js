@@ -7,7 +7,8 @@ export const clientService = {
   listClients: ({ workspaceId, search, status, page = 1, pageSize = DEFAULT_PAGE_SIZE } = {}) =>
     apiRequest(`/clients${toQueryString({ workspaceId, search, status, page, pageSize })}`),
 
-  listClientOptions: (workspaceId) => apiRequest(`/clients/options${toQueryString({ workspaceId })}`),
+  listClientOptions: (workspaceId, { assignedOnly = false } = {}) =>
+    apiRequest(`/clients/options${toQueryString({ workspaceId, assignedOnly: assignedOnly ? 'true' : '' })}`),
 
   createClient: (payload) => apiRequest('/clients', { method: 'POST', body: payload }),
 

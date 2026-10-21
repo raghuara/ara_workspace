@@ -19,14 +19,14 @@ const isImage = (attachment) => attachment.mimeType?.startsWith('image/')
  * Listed URLs are short-lived signed links; the list is re-fetched after every
  * change rather than patched, so a stale link is never shown.
  */
-export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
+export const TaskAttachments = ({ taskId, canEdit, compact = false, ownerType = 'task', title }) => {
   const inputRef = useRef(null)
   const [uploading, setUploading] = useState(false)
   const [progress, setProgress] = useState({ done: 0, total: 0 })
   const [error, setError] = useState('')
   const [preview, setPreview] = useState(null)
 
-  const attachments = useAsync(attachmentService.list, ['task', taskId], {
+  const attachments = useAsync(attachmentService.list, [ownerType, taskId], {
     enabled: Boolean(taskId),
     keepPrevious: false,
   })
@@ -51,7 +51,7 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
       // Sequential on purpose: keeps the progress honest and avoids hammering
       // the upload endpoint with a burst of parallel multipart requests.
       for (const file of chosen) {
-        await attachmentService.upload({ ownerType: 'task', ownerId: taskId, file, category: 'reference' })
+        await attachmentService.upload({ ownerType, ownerId: taskId, file, category: 'reference' })
         setProgress((current) => ({ ...current, done: current.done + 1 }))
       }
       attachments.reload()
@@ -82,7 +82,7 @@ export const TaskAttachments = ({ taskId, canEdit, compact = false }) => {
     <Box>
       <Stack direction="row" spacing={1} sx={{ alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
         <Typography variant="subtitle2" component="p">
-          Reference images &amp; files
+          {title ?? 'Reference images & files'}
           {items.length > 0 ? (
             <Typography component="span" variant="caption" sx={{ ml: 0.75 }}>
               ({items.length})

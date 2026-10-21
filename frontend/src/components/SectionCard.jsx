@@ -15,7 +15,7 @@ export const SectionCard = ({
   const accentColor = accent ? (STATUS_TONES[accent]?.strong ?? colors.brand) : null
 
   return (
-    <Card sx={{ display: 'flex', flexDirection: 'column', ...sx }}>
+    <Card sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, ...sx }}>
       {title || action ? (
         <>
           <Stack

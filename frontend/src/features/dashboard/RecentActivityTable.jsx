@@ -34,9 +34,9 @@ const timeAgo = (iso) => {
   return days === 1 ? 'yesterday' : `${days} days ago`
 }
 
-export const RecentActivityTable = ({ workspaceId, range, limit = 6, canView = true }) => {
+export const RecentActivityTable = ({ workspaceId = '', range, limit = 6, canView = true }) => {
   const activity = useAsync(activityService.listActivity, [{ workspaceId, ...range, page: 1, pageSize: limit }], {
-    enabled: canView && Boolean(workspaceId),
+    enabled: canView,
   })
 
   if (!canView) return null
@@ -47,7 +47,7 @@ export const RecentActivityTable = ({ workspaceId, range, limit = 6, canView = t
   return (
     <SectionCard
       title="Recent activity"
-      description="Latest changes across the workspace"
+      description={workspaceId ? 'Latest changes in this workspace' : 'Latest changes across every workspace'}
       accent="blue"
       padded={false}
       action={
