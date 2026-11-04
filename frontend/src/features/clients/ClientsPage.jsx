@@ -4,11 +4,13 @@ import {
   Box,
   Button,
   Card,
+  Checkbox,
   Dialog,
   DialogActions,
   DialogContent,
   DialogTitle,
   Divider,
+  FormControlLabel,
   IconButton,
   MenuItem,
   Stack,
@@ -36,18 +38,22 @@ import { TonePicker } from '@/components/TonePicker'
 import { colors } from '@/theme/tokens'
 import { UserAvatar } from '@/components/UserAvatar'
 import { clientService } from '@/api/clientService'
+import { ticketService } from '@/api/ticketService'
 import { isForbidden } from '@/api/httpClient'
 import { PERMISSIONS } from '@/constants/permissions'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { usePermissions } from '@/hooks/usePermissions'
+import { useSession } from '@/hooks/useSession'
 import { useSubmit } from '@/hooks/useSubmit'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { layout } from '@/theme/tokens'
 import { pluralize } from '@/utils/format'
 import { ClientCoverage } from './ClientCoverage'
+import { buildCoverage, countByClient } from './clientCoverageData'
 
 const STATUSES = ['Active', 'On hold', 'Prospect', 'Closed']
+const CONTROL_HEIGHT = 40
 
 const VIEWS = [
   { key: 'list', label: 'Clients', icon: Rows3 },
@@ -217,10 +223,13 @@ const ClientFormDialog = ({ client, workspaceId, onClose, onSaved }) => {
 
 export const ClientsPage = () => {
   const { can } = usePermissions()
+  const { user } = useSession()
   const { activeWorkspaceId, activeWorkspace, refreshStructure } = useWorkspace()
 
   const [view, setView] = useState('list')
   const [coverageClientId, setCoverageClientId] = useState('')
+  const [coveragePersonId, setCoveragePersonId] = useState('')
+  const [mineOnly, setMineOnly] = useState(false)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('')
   const [page, setPage] = useState(0)
@@ -240,9 +249,28 @@ export const ClientsPage = () => {
     enabled: Boolean(activeWorkspaceId),
   })
 
-  const coverage = useAsync(clientService.listClientOptions, [activeWorkspaceId], {
+  // Without "see every client", the tab shows a person only their own book.
+  const seesEveryBook = can(PERMISSIONS.CLIENT_COVERAGE_ALL)
+  const coverageArgs = useMemo(() => ({ assignedOnly: !seesEveryBook }), [seesEveryBook])
+  const coverage = useAsync(clientService.listClientOptions, [activeWorkspaceId, coverageArgs], {
     enabled: Boolean(activeWorkspaceId) && view === 'coverage',
   })
+
+  const ticketQuery = useMemo(() => ({ workspaceId: activeWorkspaceId, openOnly: 'true' }), [activeWorkspaceId])
+  const openTicketList = useAsync(ticketService.listTickets, [ticketQuery], {
+    enabled: Boolean(activeWorkspaceId) && view === 'coverage' && can(PERMISSIONS.TICKET_VIEW),
+  })
+
+  const coveragePeople = buildCoverage(coverage.data ?? []).people
+  const openTickets = countByClient(openTicketList.data ?? [])
+  const iHandleClients = coveragePeople.some((person) => person.id === user?.id)
+  const myPersonId = seesEveryBook ? (mineOnly ? (user?.id ?? '') : coveragePersonId) : (user?.id ?? '')
+
+  const showEveryone = () => {
+    setMineOnly(false)
+    setCoverageClientId('')
+    setCoveragePersonId('')
+  }
 
   const refresh = () => {
     reload()
@@ -290,7 +318,14 @@ export const ClientsPage = () => {
         <Stack direction={{ xs: 'column', md: 'row' }} spacing={1.5} sx={{ p: 2, alignItems: { md: 'center' } }}>
           <Stack
             direction="row"
-            sx={{ p: 0.375, border: `1px solid ${colors.border}`, borderRadius: 999, bgcolor: colors.page, flexShrink: 0 }}
+            sx={{
+              height: CONTROL_HEIGHT,
+              p: 0.5,
+              border: `1px solid ${colors.border}`,
+              borderRadius: 999,
+              bgcolor: colors.page,
+              flexShrink: 0,
+            }}
           >
             {VIEWS.map((item) => {
               const active = view === item.key
@@ -306,8 +341,7 @@ export const ClientsPage = () => {
                     display: 'flex',
                     alignItems: 'center',
                     gap: 0.5,
-                    height: 30,
-                    px: 1.25,
+                    px: 1.5,
                     border: 0,
                     borderRadius: 999,
                     bgcolor: active ? colors.surface : 'transparent',
@@ -321,7 +355,7 @@ export const ClientsPage = () => {
                   }}
                 >
                   <Icon size={14} strokeWidth={2} aria-hidden="true" />
-                  {item.label}
+                  {item.key === 'coverage' && !seesEveryBook ? 'My clients' : item.label}
                 </Box>
               )
             })}
@@ -337,6 +371,7 @@ export const ClientsPage = () => {
                 }}
                 label="Search clients"
                 placeholder="Search name, company, contact…"
+                sx={{ '& .MuiOutlinedInput-root': { height: CONTROL_HEIGHT } }}
               />
               <TextField
                 select
@@ -347,7 +382,7 @@ export const ClientsPage = () => {
                   setStatus(event.target.value)
                   setPage(0)
                 }}
-                sx={{ minWidth: { md: 170 } }}
+                sx={{ minWidth: { md: 170 }, '& .MuiOutlinedInput-root': { height: CONTROL_HEIGHT } }}
               >
                 <MenuItem value="">All statuses</MenuItem>
                 {STATUSES.map((option) => (
@@ -357,24 +392,89 @@ export const ClientsPage = () => {
                 ))}
               </TextField>
             </>
+          ) : !seesEveryBook ? (
+            <Typography variant="caption" sx={{ alignSelf: 'center', color: colors.textSecondary }}>
+              The clients assigned to you. An admin can widen this on the Access tab.
+            </Typography>
           ) : (
-            <TextField
-              select
-              size="small"
-              label="Client"
-              value={coverageClientId}
-              onChange={(event) => setCoverageClientId(event.target.value)}
-              helperText={coverageClientId ? 'Showing only who handles this client.' : 'Pick one to see who handles it.'}
-              sx={{ minWidth: { md: 240 } }}
-            >
-              <MenuItem value="">All clients</MenuItem>
-              {(coverage.data ?? []).map((client) => (
-                <MenuItem key={client.id} value={client.id}>
-                  {client.name}
-                  {client.company ? ` · ${client.company}` : ''}
-                </MenuItem>
-              ))}
-            </TextField>
+            <>
+              <Box sx={{ flex: 1 }} />
+
+              {iHandleClients ? (
+                <FormControlLabel
+                  control={
+                    <Checkbox
+                      size="small"
+                      checked={mineOnly}
+                      onChange={() => {
+                        setMineOnly((current) => !current)
+                        setCoverageClientId('')
+                        setCoveragePersonId('')
+                      }}
+                      sx={{ py: 0 }}
+                    />
+                  }
+                  label="Handled by me"
+                  sx={{
+                    m: 0,
+                    height: CONTROL_HEIGHT,
+                    pl: 0.5,
+                    pr: 1.5,
+                    flexShrink: 0,
+                    border: `1px solid ${mineOnly ? colors.brand : colors.border}`,
+                    borderRadius: 2,
+                    bgcolor: mineOnly ? colors.brandSoft : colors.surface,
+                    '& .MuiFormControlLabel-label': {
+                      fontSize: '0.8125rem',
+                      fontWeight: mineOnly ? 650 : 500,
+                      color: mineOnly ? colors.brand : colors.textPrimary,
+                      whiteSpace: 'nowrap',
+                    },
+                  }}
+                />
+              ) : null}
+
+              <TextField
+                select
+                size="small"
+                label="Person"
+                disabled={mineOnly}
+                value={coveragePersonId}
+                onChange={(event) => {
+                  setCoveragePersonId(event.target.value)
+                  setCoverageClientId('')
+                }}
+                sx={{ minWidth: { md: 210 }, '& .MuiOutlinedInput-root': { height: CONTROL_HEIGHT } }}
+              >
+                <MenuItem value="">Everyone</MenuItem>
+                {coveragePeople.map((person) => (
+                  <MenuItem key={person.id} value={person.id}>
+                    {person.fullName} · {pluralize(person.clients.length, 'client')}
+                  </MenuItem>
+                ))}
+              </TextField>
+
+              <TextField
+                select
+                size="small"
+                label="Client"
+                disabled={mineOnly}
+                value={coverageClientId}
+                onChange={(event) => {
+                  setCoverageClientId(event.target.value)
+                  setCoveragePersonId('')
+                }}
+                sx={{ minWidth: { md: 210 }, '& .MuiOutlinedInput-root': { height: CONTROL_HEIGHT } }}
+              >
+                <MenuItem value="">All clients</MenuItem>
+                {(coverage.data ?? []).map((client) => (
+                  <MenuItem key={client.id} value={client.id}>
+                    {client.name}
+                    {client.company ? ` · ${client.company}` : ''}
+                  </MenuItem>
+                ))}
+              </TextField>
+            </>
           )}
         </Stack>
         <Divider />
@@ -386,10 +486,14 @@ export const ClientsPage = () => {
             error={coverage.error}
             onRetry={coverage.reload}
             onPickClient={findInList}
+            onPickPerson={setCoveragePersonId}
             canAssign={can(PERMISSIONS.CLIENT_UPDATE)}
             canSeeTickets={can(PERMISSIONS.TICKET_VIEW)}
-            focusClientId={coverageClientId}
-            onClearFocus={() => setCoverageClientId('')}
+            ownBookOnly={!seesEveryBook}
+            focusClientId={seesEveryBook ? coverageClientId : ''}
+            focusPersonId={myPersonId}
+            openTickets={openTickets}
+            onClearFocus={showEveryone}
           />
         ) : (
           <QueryStateView error={error} onRetry={reload}>

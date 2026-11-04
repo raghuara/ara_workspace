@@ -4,6 +4,7 @@ const accountModel = require("../models/account.model");
 const access = require("../services/access.service");
 const { nextId } = require("../utils/ids");
 const { withTransaction } = require("../utils/transaction");
+const { broadcastFrom: broadcast, refreshRoomsFrom } = require("../utils/realtime");
 const { DEFAULT_STATUS_TEMPLATES, LIMITS, STATUS_KINDS, TONES, USER_TYPE } = require("../constants/workspace");
 
 const text = (value) => (typeof value === "string" ? value.trim() : "");
@@ -57,13 +58,17 @@ const mapGroup = (row) => ({
   leadName: row.lead_name ?? "—"
 });
 
-const mapTeam = (row, memberIds = []) => ({
+const mapTeam = (row, memberIds = [], supervisorIds = []) => ({
   id: row.id,
   groupId: row.group_id,
   name: row.name,
   leadId: row.lead_id,
   leadName: row.lead_name ?? "—",
-  memberIds
+  assignMode: row.assign_mode === "lead" ? "lead" : "creator",
+  assignerId: row.assigner_id ?? "",
+  assignerName: row.assigner_name ?? row.lead_name ?? "",
+  memberIds,
+  supervisorIds
 });
 
 const mapColumn = (row) => ({
@@ -278,7 +283,7 @@ const getStructure = async (req, res) => {
   const membersByTeam = new Map();
   teamMembers.forEach((row) => {
     if (!membersByTeam.has(row.team_id)) membersByTeam.set(row.team_id, []);
-    membersByTeam.get(row.team_id).push({ id: row.employee_id, fullName: row.full_name });
+    membersByTeam.get(row.team_id).push({ id: row.employee_id, fullName: row.full_name, role: row.role, designation: row.designation });
   });
 
   const visibleGroups = groups
@@ -295,7 +300,11 @@ const getStructure = async (req, res) => {
         teams: visibleTeams.map(({ team, level }) => {
           const teamMemberList = membersByTeam.get(team.id) ?? [];
           return {
-            ...mapTeam(team, teamMemberList.map((member) => member.id)),
+            ...mapTeam(
+              team,
+              teamMemberList.map((member) => member.id),
+              teamMemberList.filter((member) => member.role === 'supervisor').map((member) => member.id)
+            ),
             access: level,
             members: teamMemberList
           };
@@ -396,22 +405,43 @@ const saveTeam = async (req, res, { group, existing }) => {
       ? await workspaceModel.findTeamMemberIds(existing?.id ?? "")
       : idList(req.body.memberIds);
 
-  if (!(await workspaceModel.employeesExist([...memberIds, ...(leadId ? [leadId] : [])]))) {
+  // Who oversees the work rather than doing it; the lead always oversees.
+  const supervisorIds =
+    req.body.supervisorIds === undefined
+      ? await workspaceModel.findTeamSupervisorIds(existing?.id ?? "")
+      : idList(req.body.supervisorIds);
+
+  // 'creator' keeps the old flow; 'lead' lets a task be created with nobody on
+  // it, for teams where the lead hands the work out afterwards.
+  const requested = req.body.assignMode === undefined ? (existing?.assign_mode ?? "creator") : text(req.body.assignMode);
+  const assignMode = requested === "lead" ? "lead" : "creator";
+  const namedAssigner =
+    req.body.assignerId === undefined ? (existing?.assigner_id ?? null) : text(req.body.assignerId) || null;
+  const assignerId = assignMode === "lead" ? namedAssigner : null;
+
+  const teamPeople = [...new Set([...memberIds, ...supervisorIds])].filter((employeeId) => employeeId !== leadId);
+
+  if (!(await workspaceModel.employeesExist([...teamPeople, ...(leadId ? [leadId] : [])]))) {
     return badRequest(res, "One of the selected people does not exist.", { memberIds: "Unknown employee." });
+  }
+
+  if (assignerId && !(await workspaceModel.employeesExist([assignerId]))) {
+    return badRequest(res, "That person does not exist.", { assignerId: "Unknown employee." });
   }
 
   const teamId = await withTransaction(async (connection) => {
     const id = existing ? existing.id : await nextId("TEAM", connection);
 
     if (existing) {
-      await workspaceModel.updateTeam(id, { name, leadId }, connection);
+      await workspaceModel.updateTeam(id, { name, leadId, assignMode, assignerId }, connection);
     } else {
-      await workspaceModel.insertTeam({ id, groupId: group.id, name, leadId }, connection);
+      await workspaceModel.insertTeam({ id, groupId: group.id, name, leadId, assignMode, assignerId }, connection);
     }
 
     await workspaceModel.replaceTeamMembers(
       id,
-      [...new Set([...memberIds, ...(leadId ? [leadId] : [])])],
+      [...teamPeople, ...(leadId ? [leadId] : [])],
+      [...new Set([...supervisorIds, ...(leadId ? [leadId] : [])])],
       connection
     );
 
@@ -422,7 +452,7 @@ const saveTeam = async (req, res, { group, existing }) => {
       );
       await accessModel.grantIfMissing({ workspaceId: group.workspace_id, employeeId: leadId, scopeType: "team", scopeId: id, level: "edit" }, connection);
     }
-    for (const employeeId of memberIds) {
+    for (const employeeId of teamPeople) {
       await workspaceModel.upsertMember(
         { workspaceId: group.workspace_id, employeeId, userTypeId: USER_TYPE.EMPLOYEE, groupId: group.id, teamId: id },
         connection
@@ -435,8 +465,8 @@ const saveTeam = async (req, res, { group, existing }) => {
 
   const saved = await workspaceModel.findTeamById(teamId);
   broadcast(req, group.workspace_id, "structure", existing ? "updated" : "created");
-  await refreshRoomsFrom(req, [...memberIds, leadId]);
-  return res.status(existing ? 200 : 201).json(mapTeam(saved, await workspaceModel.findTeamMemberIds(teamId)));
+  await refreshRoomsFrom(req, [...teamPeople, leadId]);
+  return res.status(existing ? 200 : 201).json(mapTeam(saved, await workspaceModel.findTeamMemberIds(teamId), await workspaceModel.findTeamSupervisorIds(teamId)));
 };
 
 const createTeam = async (req, res) => {

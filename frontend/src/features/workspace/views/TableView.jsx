@@ -25,6 +25,7 @@ import {
   TextCursorInput,
   TriangleAlert,
 } from 'lucide-react'
+import { AutoLoadMore } from '@/components/AutoLoadMore'
 import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -50,6 +51,7 @@ const COLUMNS = [
 ]
 
 const PRIORITY_ORDER = { Urgent: 0, High: 1, Normal: 2, Low: 3 }
+const TABLE_PAGE = 50
 
 const TitleCell = ({ task, canUpdate, onChanged, onEdit }) => {
   const [renaming, setRenaming] = useState(false)
@@ -157,6 +159,7 @@ export const TableView = ({ board, loading, onOpenTask, onChanged }) => {
   const [editingTaskId, setEditingTaskId] = useState(null)
   const [orderBy, setOrderBy] = useState('dueDate')
   const [direction, setDirection] = useState('asc')
+  const [limit, setLimit] = useState(TABLE_PAGE)
 
   const rows = useMemo(() => {
     const all = board?.columns.flatMap((column) => column.tasks) ?? []
@@ -220,7 +223,7 @@ export const TableView = ({ board, loading, onOpenTask, onChanged }) => {
           </TableHead>
 
           <TableBody>
-            {rows.map((task, index) => {
+            {rows.slice(0, limit).map((task, index) => {
               const statusTone = STATUS_TONES[task.statusTone] ?? STATUS_TONES.slate
               const priorityTone = STATUS_TONES[PRIORITY_TONES[task.priority] ?? 'gray']
 
@@ -397,6 +400,19 @@ export const TableView = ({ board, loading, onOpenTask, onChanged }) => {
                 </TableRow>
               )
             })}
+            {rows.length > limit ? (
+              <TableRow>
+                <TableCell colSpan={COLUMNS.length} sx={{ py: 0.5 }}>
+                  <AutoLoadMore
+                    fullWidth
+                    hidden={rows.length - limit}
+                    step={TABLE_PAGE}
+                    onMore={() => setLimit((current) => current + TABLE_PAGE)}
+                    scrollRoot=".MuiTableContainer-root"
+                  />
+                </TableCell>
+              </TableRow>
+            ) : null}
           </TableBody>
         </Table>
       </TableContainer>

@@ -27,6 +27,10 @@ const storeOpen = (open) => {
 
 const peopleHint = (summary) => {
   if (summary.scope === 'workspace') return `${summary.counts.groups} groups · ${summary.counts.teams} teams`
+
+  // Only the people who do the work carry tasks; the rest assign and review.
+  const { workers, supervisors } = summary.counts
+  if (typeof workers === 'number' && supervisors > 0) return `${workers} doing the work · ${supervisors} overseeing`
   if (summary.scope === 'group') return `${summary.counts.teams} teams · lead ${summary.lead?.fullName ?? '—'}`
   return `Lead ${summary.lead?.fullName ?? '—'}`
 }
@@ -58,7 +62,7 @@ const Pill = ({ tone, children }) => {
   )
 }
 
-export const ScopeStats = ({ summary, loading, showPoints = true, personal: personalView = false }) => {
+export const ScopeStats = ({ summary, loading, showPoints = true, personal: personalView = false, onDrill }) => {
   const [open, setOpen] = useState(readOpen)
   const regionId = useId()
   const personal = personalView || Boolean(summary?.personal)
@@ -156,17 +160,27 @@ export const ScopeStats = ({ summary, loading, showPoints = true, personal: pers
             <StatCard
               dense
               label={personal ? 'My tasks' : 'Tasks'}
+              onClick={onDrill ? () => onDrill('tasks') : undefined}
               value={summary.tasks}
               helperText={`${summary.open} open`}
               icon={ClipboardList}
               tone="blue"
             />
             {personal ? null : (
-              <StatCard dense label="People" value={summary.counts.members} helperText={peopleHint(summary)} icon={Users} tone="violet" />
+              <StatCard
+                dense
+                label="People"
+                value={summary.counts.members}
+                helperText={peopleHint(summary)}
+                icon={Users}
+                tone="violet"
+                onClick={onDrill ? () => onDrill('people') : undefined}
+              />
             )}
             <StatCard
               dense
               label="Completed"
+              onClick={onDrill ? () => onDrill('completed') : undefined}
               value={`${summary.completionRate}%`}
               helperText={`${summary.completed} of ${summary.tasks} tasks`}
               icon={CircleCheck}
@@ -176,6 +190,7 @@ export const ScopeStats = ({ summary, loading, showPoints = true, personal: pers
             <StatCard
               dense
               label="In correction"
+              onClick={onDrill ? () => onDrill('correction') : undefined}
               value={summary.inCorrection}
               helperText={`${summary.correctionMoves} rework moves`}
               icon={RefreshCcw}
@@ -185,6 +200,7 @@ export const ScopeStats = ({ summary, loading, showPoints = true, personal: pers
             <StatCard
               dense
               label="Overdue"
+              onClick={onDrill ? () => onDrill('overdue') : undefined}
               value={summary.overdue}
               helperText={summary.dueToday ? `${summary.dueToday} due today` : summary.overdue ? 'Needs attention' : 'All on track'}
               icon={summary.overdue ? TriangleAlert : CircleCheck}
@@ -195,6 +211,7 @@ export const ScopeStats = ({ summary, loading, showPoints = true, personal: pers
               <StatCard
                 dense
                 label="Points"
+                onClick={onDrill ? () => onDrill('points') : undefined}
                 value={`${summary.completedPoints}/${summary.points}`}
                 helperText="earned of planned"
                 icon={Gauge}

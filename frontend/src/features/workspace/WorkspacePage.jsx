@@ -39,7 +39,9 @@ import { AddGroupDialog } from './components/AddGroupDialog'
 import { RemoveGroupDialog } from './components/RemoveGroupDialog'
 import { TaskDetailDrawer } from './components/TaskDetailDrawer'
 import { ScopeDetailsDrawer } from './components/ScopeDetailsDrawer'
+import { SummaryDetailsDialog } from './components/SummaryDetailsDialog'
 import { ScopeStats } from './components/ScopeStats'
+import { ScopePeopleBar } from './components/ScopePeopleBar'
 import { RecurringTaskDialog } from './components/RecurringTaskDialog'
 import { BoardView } from './views/BoardView'
 import { ListView } from './views/ListView'
@@ -57,6 +59,23 @@ const EMPTY_FILTERS = {
 }
 
 const FILTER_KEYS = Object.keys(EMPTY_FILTERS)
+
+const placeTask = (current, task) => {
+  const home = current.columns.find((column) => column.tasks.some((item) => item.id === task.id))
+  const columns = current.columns.map((column) => {
+    let tasks
+    if (home?.id === column.id && column.id === task.statusId) {
+      tasks = column.tasks.map((item) => (item.id === task.id ? task : item))
+    } else {
+      tasks = column.tasks.filter((item) => item.id !== task.id)
+      if (column.id === task.statusId) tasks = [task, ...tasks]
+      else if (tasks.length === column.tasks.length) return column
+    }
+    return { ...column, tasks, taskCount: tasks.length, points: tasks.reduce((sum, item) => sum + item.points, 0) }
+  })
+  const all = columns.flatMap((column) => column.tasks)
+  return { ...current, columns, totalTasks: all.length, totalPoints: all.reduce((sum, item) => sum + item.points, 0) }
+}
 
 const filtersFromParams = (params) => {
   const next = { ...EMPTY_FILTERS }
@@ -85,7 +104,11 @@ export const WorkspacePage = () => {
   const { can } = usePermissions()
   const { canCreateAnywhere } = useAccess()
   const { isEnabled } = useFeatures()
-  const { activeWorkspace, activeWorkspaceId, groups, teams, refreshStructure } = useWorkspace()
+  const { activeWorkspace, activeWorkspaceId, groups, teams, members, refreshStructure } = useWorkspace()
+  const directory = useMemo(
+    () => new Map(members.map((member) => [member.employeeId, { fullName: member.fullName, designation: member.designation }])),
+    [members],
+  )
 
   const scope = useMemo(
     () => ({ groupId: params.groupId ?? '', teamId: params.teamId ?? '' }),
@@ -104,6 +127,8 @@ export const WorkspacePage = () => {
   const [removingGroup, setRemovingGroup] = useState(null)
   const [selectedTask, setSelectedTask] = useState(null)
   const [detailsOpen, setDetailsOpen] = useState(false)
+  const [detailsFocus, setDetailsFocus] = useState(null)
+  const [drill, setDrill] = useState(null)
   const [addMenu, setAddMenu] = useState(null)
   const [recurringOpen, setRecurringOpen] = useState(false)
 
@@ -111,7 +136,7 @@ export const WorkspacePage = () => {
   const view = availableTabs.some((tab) => tab.value === params.view) ? params.view : null
 
   const debouncedSearch = useDebouncedValue(filters.search, 300)
-  const { range } = usePeriod()
+  const { range, periodLabel } = usePeriod()
 
   // The route owns group/team scope, so it always wins over the filter bar.
   const query = useMemo(
@@ -143,6 +168,14 @@ export const WorkspacePage = () => {
   const summary = useAsync(dashboardService.getScopeSummary, [activeWorkspaceId, { ...scope, ...range }], {
     enabled: Boolean(activeWorkspaceId) && Boolean(view),
   })
+
+  const showSavedTask = (saved) => {
+    const filtered = FILTER_KEYS.some((key) => filters[key] && filters[key] !== EMPTY_FILTERS[key])
+    const inScope =
+      (!scope.groupId || saved?.groupId === scope.groupId) && (!scope.teamId || saved?.teamId === scope.teamId)
+    if (saved?.id && board && !filtered && inScope) setBoard(placeTask(board, saved))
+    refreshAll()
+  }
 
   const refreshAll = () => {
     reload()
@@ -191,7 +224,7 @@ export const WorkspacePage = () => {
 
   const title = team?.name ?? group?.name ?? activeWorkspace.name
   const description = team
-    ? `${group?.name} · ${activeWorkspace.name} · lead ${team.leadName} · ${team.members.length} members`
+    ? `${group?.name} · ${activeWorkspace.name} · lead ${team.leadName}`
     : group
       ? `${activeWorkspace.name} · ${group.teams.length} teams · lead ${group.leadName}`
       : activeWorkspace.description
@@ -270,11 +303,25 @@ export const WorkspacePage = () => {
         </Stack>
       ) : null}
 
+      {canSeeWorkspace && group ? (
+        <ScopePeopleBar
+          title={team?.name ?? group.name}
+          teams={team ? [team] : group.teams}
+          directory={directory}
+          onShowTasks={(person) => changeFilters({ ...filters, assigneeId: person.id })}
+        />
+      ) : null}
+
       <ScopeStats
         summary={summary.data}
         loading={summary.loading && !summary.data}
         showPoints={isEnabled(FEATURES.WEIGHTAGE)}
         personal={!canSeeWorkspace}
+        onDrill={(kind) => {
+          if (kind !== 'people') return setDrill(kind)
+          setDetailsFocus('people')
+          return setDetailsOpen(true)
+        }}
       />
 
       <Stack
@@ -317,6 +364,7 @@ export const WorkspacePage = () => {
         hideGroup={Boolean(group)}
         hideTeam={Boolean(team)}
         teamScopeGroupId={group?.id}
+        teamScopeId={team?.id}
       />
 
       <QueryStateView error={error} onRetry={reload}>
@@ -355,7 +403,7 @@ export const WorkspacePage = () => {
           defaultGroupId={scope.groupId}
           defaultTeamId={scope.teamId}
           onClose={() => setTaskDialog({ open: false, task: null, statusId: null })}
-          onSaved={refreshAll}
+          onSaved={showSavedTask}
         />
       ) : null}
 
@@ -427,12 +475,35 @@ export const WorkspacePage = () => {
         />
       ) : null}
 
+      {drill ? (
+        <SummaryDetailsDialog
+          kind={drill}
+          workspaceId={activeWorkspaceId}
+          scope={scope}
+          range={range}
+          periodLabel={periodLabel}
+          onClose={() => setDrill(null)}
+          onOpenTask={(task) => {
+            setDrill(null)
+            setSelectedTask(task)
+          }}
+        />
+      ) : null}
+
       {detailsOpen && canSeeWorkspace ? (
         <ScopeDetailsDrawer
           key={`${scope.groupId}/${scope.teamId}`}
           workspaceId={activeWorkspaceId}
           scope={scope}
-          onClose={() => setDetailsOpen(false)}
+          focus={detailsFocus}
+          onPickPerson={(member) => {
+            setDetailsOpen(false)
+            changeFilters({ ...filters, assigneeId: member.id, tab: 'all' })
+          }}
+          onClose={() => {
+            setDetailsOpen(false)
+            setDetailsFocus(null)
+          }}
           onOpenBoard={(target) => {
             setDetailsOpen(false)
             navigate(viewPathFor(target, view))

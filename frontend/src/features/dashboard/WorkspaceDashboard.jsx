@@ -28,6 +28,7 @@ import { formatLongDate, formatRelativeDay, toIsoDate } from '@/utils/date'
 import { RecentActivityTable } from './RecentActivityTable'
 import { TeamsTable } from './TeamsTable'
 import { ClientDeskSummaryCard } from './ClientDeskSummaryCard'
+import { DailyTrackerCard } from './DailyTrackerCard'
 import { WorkspaceSummaryCard } from './WorkspaceSummaryCard'
 
 const GAP = 1.5
@@ -168,6 +169,10 @@ export const WorkspaceDashboard = () => {
                   description={`${mine.byTeam.length} teams in ${mine.name} · corrections and overdue highlighted`}
                 />
               </Box>
+            ) : null}
+
+            {can(PERMISSIONS.WORKSPACE_VIEW) && activeWorkspace ? (
+              <DailyTrackerCard workspaceId={activeWorkspace.id} workspaceName={activeWorkspace.name} />
             ) : null}
 
             <Box sx={{ display: 'grid', gap: GAP, gridTemplateColumns: { xs: 'minmax(0, 1fr)', lg: 'minmax(0, 1fr) minmax(0, 1.6fr)' } }}>

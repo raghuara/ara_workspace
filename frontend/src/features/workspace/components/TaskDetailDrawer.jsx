@@ -23,6 +23,7 @@ import { taskService } from '@/api/taskService'
 import { HISTORY_ACTIONS, PRIORITY_TONES, STATUS_TONES, sizeByKey } from '@/constants/workspaceDomain'
 import { PERMISSIONS } from '@/constants/permissions'
 import { ROUTES } from '@/constants/routes'
+import { USER_TYPE } from '@/constants/userTypes'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAccess } from '@/hooks/useAccess'
@@ -34,7 +35,6 @@ import { CommentComposer, CommentThread } from './TaskComments'
 import { colors } from '@/theme/tokens'
 import { formatDate, formatRelativeDay, formatStamp } from '@/utils/date'
 
-const EMPLOYEE_TYPE_ID = 3
 
 const clamp = (lines) => ({
   display: '-webkit-box',
@@ -199,7 +199,7 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
   if (!task) return null
   const size = sizeByKey(task.sizeKey)
   const tone = STATUS_TONES[task.statusTone] ?? STATUS_TONES.slate
-  const ownTasksOnly = userType?.id === EMPLOYEE_TYPE_ID && !isAdmin
+  const ownTasksOnly = userType?.id === USER_TYPE.EMPLOYEE && !isAdmin
   const canEditDescription = editable && can(PERMISSIONS.TASK_UPDATE) && !ownTasksOnly
   const commentList = comments.data ?? []
   const commentCount = comments.data ? commentList.length : (task.commentCount ?? 0)
@@ -342,6 +342,7 @@ export const TaskDetailDrawer = ({ task, onClose, onChanged, onEdit }) => {
             { label: 'Scheduled', value: task.scheduledDate ? formatDate(task.scheduledDate) : '—' },
             { label: 'Completed', value: task.completedAt ? formatDate(task.completedAt) : 'Not yet' },
             { label: 'Created', value: formatDate(task.createdAt) },
+            { label: 'Assigned by', value: task.createdByName ?? '—' },
             { label: 'Weightage', value: `${task.points} points (${size.label})` },
           ]}
         />

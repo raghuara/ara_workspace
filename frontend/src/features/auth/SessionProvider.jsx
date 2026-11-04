@@ -17,7 +17,6 @@ const STATUS = {
 
 export const SessionProvider = ({ children }) => {
   const [session, setSession] = useState(null)
-  const [roles, setRoles] = useState([])
   const [status, setStatus] = useState(STATUS.LOADING)
   const [attempt, setAttempt] = useState(0)
   const [failure, setFailure] = useState('')
@@ -69,11 +68,7 @@ export const SessionProvider = ({ children }) => {
         return
       }
 
-      const loadedRoles = await sessionService.listRoles().catch(() => [])
-      if (cancelled) return
-
       setSession(loaded)
-      setRoles(loadedRoles)
       setStatus(STATUS.AUTHENTICATED)
     }
 
@@ -93,10 +88,7 @@ export const SessionProvider = ({ children }) => {
     const result = await authService.login(credentials)
     queryClient.clear()
 
-    const loadedRoles = await sessionService.listRoles().catch(() => [])
-
     setSession(result.session)
-    setRoles(loadedRoles)
     setStatus(STATUS.AUTHENTICATED)
 
     return result.session
@@ -107,16 +99,7 @@ export const SessionProvider = ({ children }) => {
     queryClient.clear()
 
     setSession(null)
-    setRoles([])
     setStatus(STATUS.ANONYMOUS)
-  }, [])
-
-  const switchRole = useCallback(async (roleId) => {
-    const updated = await sessionService.switchRole(roleId)
-    queryClient.clear()
-    setSession(updated)
-
-    return updated
   }, [])
 
   // Reload session details after feature or permission changes.
@@ -137,13 +120,11 @@ export const SessionProvider = ({ children }) => {
       features: session?.features ?? {},
       workspaceIds: session?.workspaceIds ?? [],
       mustChangePassword: Boolean(session?.mustChangePassword),
-      roles,
       login,
       logout,
-      switchRole,
       refreshSession,
     }),
-    [status, session, roles, login, logout, switchRole, refreshSession],
+    [status, session, login, logout, refreshSession],
   )
 
   if (status === STATUS.UNREACHABLE) {

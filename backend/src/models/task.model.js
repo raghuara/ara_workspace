@@ -30,6 +30,9 @@ const TASK_SELECT = `
     g.name AS group_name,
     g.tone AS group_tone,
     tm.name AS team_name,
+    CONCAT(creator.first_name, ' ', creator.last_name) AS created_by_name,
+    creator.designation AS created_by_designation,
+    CONCAT(finisher.first_name, ' ', finisher.last_name) AS completed_by_name,
     (sc.kind <> 'completed' AND t.due_date IS NOT NULL AND t.due_date < CURDATE()) AS is_overdue,
     (SELECT COUNT(*) FROM attachments a WHERE a.owner_type = 'task' AND a.owner_id = t.id) AS attachment_count
   FROM tasks t
@@ -37,6 +40,8 @@ const TASK_SELECT = `
   LEFT JOIN clients cl ON cl.id = t.client_id
   LEFT JOIN workspace_groups g ON g.id = t.group_id
   LEFT JOIN teams tm ON tm.id = t.team_id
+  LEFT JOIN employees creator ON creator.employee_id = t.created_by_id
+  LEFT JOIN employees finisher ON finisher.employee_id = t.completed_by_id
 `;
 
 const buildFilters = ({ workspaceId, visibility, filters }) => {
@@ -71,7 +76,9 @@ const buildFilters = ({ workspaceId, visibility, filters }) => {
     }
   });
 
-  if (filters.assigneeId) {
+  if (filters.assigneeId === "none") {
+    clauses.push("NOT EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id)");
+  } else if (filters.assigneeId) {
     clauses.push("EXISTS (SELECT 1 FROM task_assignees ta WHERE ta.task_id = t.id AND ta.employee_id = ?)");
     params.push(filters.assigneeId);
   }
@@ -205,11 +212,27 @@ const deleteTask = async (taskId, connection = pool) => {
   await connection.query("DELETE FROM tasks WHERE id = ?", [taskId]);
 };
 
+// The title is copied onto the row, so the log still names the task long after
+// the task itself has been deleted.
 const insertHistory = async (entry, connection = pool) => {
+  let title = entry.taskTitle ?? null;
+  if (!title) {
+    const [rows] = await connection.query("SELECT title FROM tasks WHERE id = ? LIMIT 1", [entry.taskId]);
+    title = rows[0]?.title ?? null;
+  }
+
   await connection.query(
-    `INSERT INTO task_history (task_id, workspace_id, actor_id, action, summary, detail)
-     VALUES (?, ?, ?, ?, ?, ?)`,
-    [entry.taskId, entry.workspaceId, entry.actorId, entry.action, entry.summary, entry.detail ? JSON.stringify(entry.detail) : null]
+    `INSERT INTO task_history (task_id, task_title, workspace_id, actor_id, action, summary, detail)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      entry.taskId,
+      title,
+      entry.workspaceId,
+      entry.actorId,
+      entry.action,
+      entry.summary,
+      entry.detail ? JSON.stringify(entry.detail) : null
+    ]
   );
 };
 

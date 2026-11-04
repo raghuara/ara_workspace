@@ -71,8 +71,12 @@ const updateAccount = async (userId, { userTypeId, isActive }, connection = pool
   await connection.query("UPDATE users SET user_type_id = ?, is_active = ? WHERE id = ?", [userTypeId, isActive, userId]);
 };
 
+// Changing the password ends every session but the one about to be issued.
 const setPassword = async (userId, passwordHash, mustChange) => {
-  await pool.query("UPDATE users SET password_hash = ?, must_change_password = ? WHERE id = ?", [passwordHash, mustChange, userId]);
+  await pool.query(
+    "UPDATE users SET password_hash = ?, must_change_password = ?, sessions_valid_from = NOW() WHERE id = ?",
+    [passwordHash, mustChange, userId]
+  );
 };
 
 const touchLastLogin = async (userId) => {

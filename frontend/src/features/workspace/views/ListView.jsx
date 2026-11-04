@@ -22,6 +22,7 @@ import {
   TextCursorInput,
   TriangleAlert,
 } from 'lucide-react'
+import { AutoLoadMore } from '@/components/AutoLoadMore'
 import { StatusChip } from '@/components/StatusChip'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -38,6 +39,8 @@ import { colors } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
 
 // One template shared by the header and every row so columns line up across groups.
+const LIST_PAGE = 40
+
 const GRID = {
   xs: 'minmax(0, 1fr)',
   md: 'minmax(0, 1fr) 132px 116px 116px 72px',
@@ -335,6 +338,9 @@ export const ListView = ({ board, loading, onOpenTask, onAddTask, onRemoveGroup,
   const [editingTaskId, setEditingTaskId] = useState(null)
 
   const [collapsed, setCollapsed] = useState({})
+  const [limits, setLimits] = useState({})
+  const showMore = (columnId) =>
+    setLimits((current) => ({ ...current, [columnId]: (current[columnId] ?? LIST_PAGE) + LIST_PAGE }))
 
   if (loading && !board) return <LinearProgress aria-label="Loading tasks" />
 
@@ -423,7 +429,7 @@ export const ListView = ({ board, loading, onOpenTask, onAddTask, onRemoveGroup,
                   <Typography sx={{ ...HEAD_CELL, justifySelf: 'end' }}>Pts</Typography>
                 </Box>
 
-                {column.tasks.map((task) =>
+                {column.tasks.slice(0, limits[column.id] ?? LIST_PAGE).map((task) =>
                   editingTaskId === task.id ? (
                     <Box
                       key={task.id}
@@ -452,6 +458,17 @@ export const ListView = ({ board, loading, onOpenTask, onAddTask, onRemoveGroup,
                     />
                   ),
                 )}
+
+                {column.tasks.length > (limits[column.id] ?? LIST_PAGE) ? (
+                  <Box sx={{ px: 1, py: 0.5, borderBottom: `1px solid ${colors.border}` }}>
+                    <AutoLoadMore
+                      fullWidth
+                      hidden={column.tasks.length - (limits[column.id] ?? LIST_PAGE)}
+                      step={LIST_PAGE}
+                      onMore={() => showMore(column.id)}
+                    />
+                  </Box>
+                ) : null}
 
                 {column.tasks.length === 0 ? (
                   <Typography variant="caption" component="p" sx={{ px: 2, py: 1.5, color: colors.textSecondary }}>

@@ -29,6 +29,7 @@ import { MemberAccessDialog } from './MemberAccessDialog'
 import { workspaceService } from '@/api/workspaceService'
 import { employeeService } from '@/api/employeeService'
 import { PERMISSIONS } from '@/constants/permissions'
+import { USER_TYPE } from '@/constants/userTypes'
 import { useAsync } from '@/hooks/useAsync'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
@@ -75,6 +76,8 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
     if (invalid?.name === name) setInvalid(null)
   }
 
+  const shown = fields.filter((field) => !field.showWhen || field.showWhen(values))
+
   const optionsFor = (field) => {
     const excluded = field.excludes ? values[field.excludes] : null
     return excluded ? field.people.filter((option) => option.id !== excluded) : field.people
@@ -83,7 +86,7 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
   const submit = async (event) => {
     event.preventDefault()
     setError('')
-    const missing = fields.find(
+    const missing = shown.find(
       (field) =>
         field.required &&
         (Array.isArray(values[field.name]) ? values[field.name].length === 0 : !String(values[field.name]).trim()),
@@ -119,7 +122,7 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
             </Alert>
           ) : null}
           <Stack spacing={1.5} sx={{ pt: 1 }}>
-            {fields.map((field) =>
+            {shown.map((field) =>
               field.tone ? (
                 <TonePicker
                   key={field.name}
@@ -201,10 +204,9 @@ const SimpleFormDialog = ({ title, fields, submitLabel, onSubmit, onClose }) => 
   )
 }
 
-const EMPLOYEE_TYPE_ID = 3
 
 const employeeCannotAdmin = (option) =>
-  option.loginUserTypeId === EMPLOYEE_TYPE_ID ? 'Employee login — change their user type in Access › Accounts to make them an admin' : null
+  option.loginUserTypeId === USER_TYPE.EMPLOYEE ? 'Employee login — change their user type in Access › Accounts to make them an admin' : null
 
 export const WorkspaceAdminPage = () => {
   const { can } = usePermissions()
@@ -495,13 +497,47 @@ export const WorkspaceAdminPage = () => {
                             { name: 'name', label: 'Team name', required: true },
                             { name: 'leadId', label: 'Team lead', people: peopleOptions },
                             {
+                              name: 'assignMode',
+                              label: 'Who picks the people?',
+                              initial: 'creator',
+                              options: [
+                                {
+                                  value: 'creator',
+                                  label: 'Whoever creates the task',
+                                  secondary: 'They must pick who does it before saving.',
+                                },
+                                {
+                                  value: 'lead',
+                                  label: 'Someone hands it out afterwards',
+                                  secondary: 'Tasks can be created with nobody on them, and the person you name decides who does each one.',
+                                },
+                              ],
+                            },
+                            {
+                              name: 'assignerId',
+                              label: 'Who hands the work out?',
+                              people: peopleOptions,
+                              showWhen: (values) => values.assignMode === 'lead',
+                              helperText: 'The person who decides who does each task. Leave empty to let the team lead do it.',
+                            },
+                            {
                               name: 'memberIds',
                               label: 'Members',
                               people: peopleOptions,
                               excludes: 'leadId',
                               multiple: true,
                               initial: [],
-                              helperText: 'Tick everyone on this team. The lead is included automatically.',
+                              helperText: 'The people who do the work. The lead is included automatically.',
+                            },
+                            {
+                              name: 'supervisorIds',
+                              label: 'Overseers',
+                              people: peopleOptions,
+                              excludes: 'leadId',
+                              multiple: true,
+                              initial: [],
+                              helperText:
+                                'Pick as many as you need — managers and reviewers who assign work instead of doing it. They do not need to be ticked under Members.',
                             },
                           ],
                           onSubmit: async (values) => {
@@ -583,13 +619,51 @@ export const WorkspaceAdminPage = () => {
                                     initial: team.leadId ?? '',
                                   },
                                   {
+                                    name: 'assignMode',
+                                    label: 'Who picks the people?',
+                                    initial: team.assignMode ?? 'creator',
+                                    options: [
+                                      {
+                                        value: 'creator',
+                                        label: 'Whoever creates the task',
+                                        secondary: 'They must pick who does it before saving.',
+                                      },
+                                      {
+                                        value: 'lead',
+                                        label: 'Someone hands it out afterwards',
+                                        secondary: 'Tasks can be created with nobody on them, and the person you name decides who does each one.',
+                                      },
+                                    ],
+                                  },
+                                  {
+                                    name: 'assignerId',
+                                    label: 'Who hands the work out?',
+                                    people: peopleOptions,
+                                    initial: team.assignerId ?? '',
+                                    showWhen: (values) => values.assignMode === 'lead',
+                                    helperText:
+                                      'The person who decides who does each task. Leave empty to let the team lead do it.',
+                                  },
+                                  {
                                     name: 'memberIds',
                                     label: 'Members',
                                     people: peopleOptions,
                                     excludes: 'leadId',
                                     multiple: true,
-                                    initial: (team.memberIds ?? []).filter((id) => id !== team.leadId),
-                                    helperText: 'The lead is included automatically.',
+                                    initial: (team.memberIds ?? []).filter(
+                                      (id) => id !== team.leadId && !(team.supervisorIds ?? []).includes(id),
+                                    ),
+                                    helperText: 'The people who do the work. The lead is included automatically.',
+                                  },
+                                  {
+                                    name: 'supervisorIds',
+                                    label: 'Overseers',
+                                    people: peopleOptions,
+                                    excludes: 'leadId',
+                                    multiple: true,
+                                    initial: (team.supervisorIds ?? []).filter((id) => id !== team.leadId),
+                                    helperText:
+                                      'Pick as many as you need — managers and reviewers who assign work instead of doing it. They are left out of workload and per-person averages. The lead always oversees.',
                                   },
                                 ],
                                 onSubmit: async (values) => {
@@ -641,7 +715,7 @@ export const WorkspaceAdminPage = () => {
           ) : (
             <Stack>
               {members.map((member) => {
-                const isAdmin = member.userTypeId === 1 || (activeWorkspace?.adminIds ?? []).includes(member.employeeId)
+                const isAdmin = member.userTypeId === USER_TYPE.MASTER_ADMIN || (activeWorkspace?.adminIds ?? []).includes(member.employeeId)
                 const summary = summariseAccess(member)
                 return (
                   <Stack

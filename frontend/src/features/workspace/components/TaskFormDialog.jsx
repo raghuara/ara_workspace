@@ -7,6 +7,7 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  ListSubheader,
   MenuItem,
   Stack,
   Tab,
@@ -18,6 +19,7 @@ import { CalendarClock, History, ImagePlus, Sun, X } from 'lucide-react'
 import { taskService } from '@/api/taskService'
 import { attachmentService } from '@/api/attachmentService'
 import { TaskAttachments } from './TaskAttachments'
+import { assigneeChoices } from '../assigneeOptions'
 import { SizePicker } from './SizePicker'
 import { isForbidden } from '@/api/httpClient'
 import { PRIORITIES, SCHEDULE_MODES, sizeByKey } from '@/constants/workspaceDomain'
@@ -29,11 +31,11 @@ import { useAccess } from '@/hooks/useAccess'
 import { useSession } from '@/hooks/useSession'
 import { colors } from '@/theme/tokens'
 import { PERMISSIONS } from '@/constants/permissions'
+import { USER_TYPE } from '@/constants/userTypes'
 import { usePermissions } from '@/hooks/usePermissions'
 import { toIsoDate } from '@/utils/date'
 
 const TODAY = () => toIsoDate(new Date())
-const EMPLOYEE_TYPE_ID = 3
 
 const SCHEDULE_TABS = [
   { value: SCHEDULE_MODES.TODAY, label: 'Today', icon: Sun, hint: 'Starts today and lands in To Do straight away.' },
@@ -51,13 +53,13 @@ const SCHEDULE_TABS = [
   },
 ]
 
-const validate = (values, mode, { canAssign }) => {
+const validate = (values, mode, { canAssign, assigneeRequired }) => {
   const errors = {}
   if (!values.title.trim()) errors.title = 'A task title is required.'
   if (!values.clientId) errors.clientId = 'Choose the client this task belongs to.'
   if (!values.groupId) errors.groupId = 'Choose a group.'
   if (!values.statusId) errors.statusId = 'Choose a board column.'
-  if (canAssign && values.assigneeIds.length === 0) errors.assigneeIds = 'Assign at least one person.'
+  if (canAssign && assigneeRequired && values.assigneeIds.length === 0) errors.assigneeIds = 'Assign at least one person.'
 
   if (mode === SCHEDULE_MODES.SCHEDULED) {
     if (!values.scheduledDate) errors.scheduledDate = 'Pick the date this task should start.'
@@ -75,7 +77,7 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
   const { columns, clients, assignableMembers, activeWorkspaceId } = useWorkspace()
   const { groupOptions, teamOptions: teamOptionsFor, allowsNoTeam, isAdmin } = useAccess()
   const { userType } = useSession()
-  const canWriteDescription = userType?.id !== EMPLOYEE_TYPE_ID || isAdmin
+  const canWriteDescription = userType?.id !== USER_TYPE.EMPLOYEE || isAdmin
   const groups = groupOptions(task?.groupId ?? null)
   const { isEnabled } = useFeatures()
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
@@ -125,6 +127,16 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
     () => (values.groupId ? teamOptionsFor(values.groupId, task?.teamId ?? null) : []),
     [teamOptionsFor, values.groupId, task],
   )
+  const chosenTeam = teamOptions.find((item) => item.id === values.teamId)
+  const leadAssigns = chosenTeam?.assignMode === 'lead'
+  const assignerName = chosenTeam?.assignerName || 'the team lead'
+  const assigneeRequired = !leadAssigns
+  const choices = assigneeChoices({
+    team: teamOptions.find((item) => item.id === values.teamId),
+    group: groups.find((item) => item.id === values.groupId),
+    members: assignableMembers,
+    selectedIds: values.assigneeIds,
+  })
   const noTeamAllowed = allowsNoTeam(values.groupId) || (task && task.groupId === values.groupId && !task.teamId)
 
   const size = sizeByKey(values.sizeKey)
@@ -155,7 +167,7 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
 
   const handleSubmit = async (event) => {
     event.preventDefault()
-    const validationErrors = validate(values, mode, { canAssign })
+    const validationErrors = validate(values, mode, { canAssign, assigneeRequired })
     setErrors(validationErrors)
     if (Object.keys(validationErrors).length > 0) return
 
@@ -175,24 +187,22 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
 
     if (!isEditing && queued.length > 0) {
       setUploadNote(`Uploading ${queued.length} image${queued.length === 1 ? '' : 's'}…`)
-      const failures = []
-      for (const file of queued) {
-        try {
-          await attachmentService.upload({ ownerType: 'task', ownerId: saved.id, file, category: 'reference' })
-        } catch {
-          failures.push(file.name)
-        }
-      }
+      const results = await Promise.allSettled(
+        queued.map((file) =>
+          attachmentService.upload({ ownerType: 'task', ownerId: saved.id, file, category: 'reference' }),
+        ),
+      )
+      const failures = queued.filter((_, index) => results[index].status === 'rejected').map((file) => file.name)
       setUploadNote('')
       if (failures.length > 0) {
         // The task itself saved; only say what did not make it.
         setErrors((current) => ({ ...current, attachments: `Could not upload: ${failures.join(', ')}` }))
-        onSaved?.()
+        onSaved?.(saved)
         return
       }
     }
 
-    onSaved?.()
+    onSaved?.(saved)
     onClose()
   }
 
@@ -339,17 +349,48 @@ export const TaskFormDialog = ({ open, task, defaultStatusId, defaultGroupId, de
                 setErrors((current) => ({ ...current, assigneeIds: undefined }))
               }}
               error={Boolean(errors.assigneeIds)}
-              helperText={errors.assigneeIds ?? ' '}
+              helperText={
+                errors.assigneeIds ?? (leadAssigns ? `Optional — ${assignerName} hands this out afterwards.` : ' ')
+              }
               size="small"
               fullWidth
-              required
-              slotProps={{ select: { multiple: true } }}
+              required={assigneeRequired}
+              slotProps={{
+                select: {
+                  multiple: true,
+                  renderValue: (selected) =>
+                    assignableMembers
+                      .filter((member) => selected.includes(member.employeeId))
+                      .map((member) => member.fullName)
+                      .join(', '),
+                },
+              }}
             >
-              {assignableMembers.map((member) => (
-                <MenuItem key={member.employeeId} value={member.employeeId}>
-                  {member.fullName}
-                </MenuItem>
-              ))}
+              {choices.scoped
+                ? [
+                    <ListSubheader key="scope-head">{choices.label}</ListSubheader>,
+                    ...choices.inScope.map((member) => (
+                      <MenuItem key={member.employeeId} value={member.employeeId}>
+                        {member.fullName}
+                        {member.oversees ? ' · oversees' : ''}
+                      </MenuItem>
+                    )),
+                    ...(choices.rest.length > 0
+                      ? [
+                          <ListSubheader key="rest-head">Elsewhere in this workspace</ListSubheader>,
+                          ...choices.rest.map((member) => (
+                            <MenuItem key={member.employeeId} value={member.employeeId}>
+                              {member.fullName}
+                            </MenuItem>
+                          )),
+                        ]
+                      : []),
+                  ]
+                : assignableMembers.map((member) => (
+                    <MenuItem key={member.employeeId} value={member.employeeId}>
+                      {member.fullName}
+                    </MenuItem>
+                  ))}
             </TextField>
           ) : (
             <Alert severity="info" sx={{ mb: 2 }}>

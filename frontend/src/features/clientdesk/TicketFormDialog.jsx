@@ -14,15 +14,15 @@ import {
   Typography,
 } from '@mui/material'
 import { Link } from 'react-router-dom'
-import { Info } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Info, MessageSquareQuote, PackagePlus, PencilRuler, Sparkles, StickyNote } from 'lucide-react'
 import { TaskAttachments } from '@/features/workspace/components/TaskAttachments'
 import { ToneChip } from '@/components/ToneChip'
 import { ticketService } from '@/api/ticketService'
 import { isForbidden } from '@/api/httpClient'
 import { PERMISSIONS } from '@/constants/permissions'
 import { ROUTES } from '@/constants/routes'
-import { TICKET_KINDS } from '@/constants/clientDesk'
-import { PRIORITIES } from '@/constants/workspaceDomain'
+import { TICKET_KINDS, kindOf } from '@/constants/clientDesk'
+import { PRIORITIES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { useSubmit } from '@/hooks/useSubmit'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
@@ -38,15 +38,78 @@ const inDays = (days) => {
   return toIsoDate(date)
 }
 
-export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, onSaved }) => {
+const KIND_ICONS = {
+  Complaint: MessageSquareQuote,
+  Requirement: PackagePlus,
+  Change: PencilRuler,
+  'New request': Sparkles,
+  Other: StickyNote,
+}
+
+const KindChoice = ({ kind, onPick }) => {
+  const Icon = KIND_ICONS[kind.value] ?? StickyNote
+  const tone = STATUS_TONES[kind.tone]
+  return (
+    <Box
+      component="button"
+      type="button"
+      onClick={() => onPick(kind.value)}
+      sx={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 1.5,
+        width: '100%',
+        px: 1.5,
+        py: 1.375,
+        textAlign: 'left',
+        border: `1px solid ${colors.border}`,
+        borderRadius: 2.5,
+        bgcolor: colors.surface,
+        font: 'inherit',
+        cursor: 'pointer',
+        transition: 'border-color 120ms ease, background-color 120ms ease',
+        '&:hover': { borderColor: tone.strong, bgcolor: tone.soft },
+        '&:focus-visible': { borderColor: tone.strong, bgcolor: tone.soft },
+      }}
+    >
+      <Box
+        sx={{
+          width: 38,
+          height: 38,
+          flexShrink: 0,
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: 2,
+          bgcolor: tone.soft,
+          color: tone.strong,
+          border: `1px solid ${tone.border}`,
+        }}
+      >
+        <Icon size={18} strokeWidth={1.9} aria-hidden="true" />
+      </Box>
+      <Box sx={{ flex: 1, minWidth: 0 }}>
+        <Typography variant="body2" sx={{ fontWeight: 650 }}>
+          {kind.pick}
+        </Typography>
+        <Typography variant="caption" component="p" sx={{ color: colors.textSecondary, lineHeight: 1.4 }}>
+          {kind.pickHint}
+        </Typography>
+      </Box>
+      <ChevronRight size={16} strokeWidth={2} color={colors.textSecondary} aria-hidden="true" />
+    </Box>
+  )
+}
+
+export const TicketFormDialog = ({ ticket, clients, defaultClientId, defaultKind, onClose, onSaved }) => {
   const isEditing = Boolean(ticket)
+  const [picking, setPicking] = useState(!isEditing && !defaultKind)
   const { activeWorkspaceId, assignableMembers } = useWorkspace()
   const { can } = usePermissions()
   const canAssignAnyone = can(PERMISSIONS.TICKET_MANAGE_ALL)
 
   const [values, setValues] = useState(() => ({
     clientId: ticket?.clientId ?? defaultClientId ?? '',
-    kind: ticket?.kind ?? 'Requirement',
+    kind: ticket?.kind ?? defaultKind ?? 'Requirement',
     title: ticket?.title ?? '',
     description: ticket?.description ?? '',
     priority: ticket?.priority ?? 'Normal',
@@ -65,6 +128,7 @@ export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, on
     setErrors((current) => ({ ...current, [field]: undefined }))
   }
 
+  const copy = kindOf(values.kind)
   const chosenClient = clients.find((client) => client.id === values.clientId) ?? null
   const followers = chosenClient?.assignees ?? []
 
@@ -104,10 +168,39 @@ export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, on
   return (
     <Dialog open onClose={submitting ? undefined : onClose} maxWidth="sm" fullWidth>
       <Box component="form" onSubmit={handleSubmit} noValidate>
-        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600 }}>
-          {isEditing ? `Edit ${ticket.token}` : 'New ticket'}
+        <DialogTitle sx={{ fontSize: '1rem', fontWeight: 600, pb: picking ? 0.5 : undefined }}>
+          {isEditing ? `Edit ${ticket.token}` : picking ? 'What did the client give you?' : `New ${copy.label.toLowerCase()}`}
+          {picking ? (
+            <Typography variant="caption" component="p" sx={{ mt: 0.25, fontWeight: 400, color: colors.textSecondary }}>
+              Pick the one that matches — the next step asks only what that one needs.
+            </Typography>
+          ) : null}
         </DialogTitle>
 
+        {picking ? (
+          <>
+            <DialogContent dividers>
+              <Stack spacing={1}>
+                {TICKET_KINDS.map((item) => (
+                  <KindChoice
+                    key={item.value}
+                    kind={item}
+                    onPick={(value) => {
+                      setValues((current) => ({ ...current, kind: value }))
+                      setPicking(false)
+                    }}
+                  />
+                ))}
+              </Stack>
+            </DialogContent>
+            <DialogActions sx={{ px: 3, py: 1.5 }}>
+              <Button onClick={onClose} variant="outlined">
+                Cancel
+              </Button>
+            </DialogActions>
+          </>
+        ) : (
+        <>
         <DialogContent dividers>
           {error ? (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -150,43 +243,46 @@ export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, on
               ))}
             </TextField>
 
-            <Box>
-              <Typography variant="caption" component="p" sx={{ mb: 0.75, color: colors.textSecondary }}>
-                What is it?
+            <Stack
+              direction="row"
+              spacing={1}
+              sx={{
+                alignItems: 'center',
+                px: 1.25,
+                py: 0.875,
+                borderRadius: 2,
+                bgcolor: STATUS_TONES[copy.tone].soft,
+                border: `1px solid ${STATUS_TONES[copy.tone].border}`,
+              }}
+            >
+              <ToneChip label={copy.label} tone={copy.tone} size="medium" />
+              <Typography variant="caption" sx={{ flex: 1, minWidth: 0, color: colors.textSecondary }}>
+                {copy.hint}
               </Typography>
-              <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap' }}>
-                {TICKET_KINDS.map((kind) => {
-                  const selected = values.kind === kind.value
-                  return (
-                    <Box
-                      key={kind.value}
-                      component="button"
-                      type="button"
-                      onClick={() => setValues((current) => ({ ...current, kind: kind.value }))}
-                      aria-pressed={selected}
-                      title={kind.hint}
-                      sx={{
-                        height: 30,
-                        px: 1.25,
-                        border: `1px solid ${selected ? colors.brand : colors.border}`,
-                        borderRadius: 999,
-                        bgcolor: selected ? colors.brand : colors.surface,
-                        color: selected ? '#FFFFFF' : colors.textPrimary,
-                        font: 'inherit',
-                        fontSize: '0.75rem',
-                        fontWeight: selected ? 650 : 500,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      {kind.label}
-                    </Box>
-                  )
-                })}
-              </Stack>
-            </Box>
+              {isEditing ? null : (
+                <Button
+                  size="small"
+                  onClick={() => setPicking(true)}
+                  startIcon={<ChevronLeft size={14} strokeWidth={2} />}
+                  sx={{ flexShrink: 0, fontSize: '0.75rem' }}
+                >
+                  Change
+                </Button>
+              )}
+            </Stack>
+
+            {isEditing ? (
+              <TextField select size="small" label="Type" value={values.kind} onChange={setField('kind')} fullWidth>
+                {TICKET_KINDS.map((item) => (
+                  <MenuItem key={item.value} value={item.value}>
+                    {item.label} — {item.hint}
+                  </MenuItem>
+                ))}
+              </TextField>
+            ) : null}
 
             <TextField
-              label="Heading"
+              label={copy.titleLabel}
               value={values.title}
               onChange={setField('title')}
               size="small"
@@ -194,18 +290,23 @@ export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, on
               required
               error={Boolean(errors.title)}
               helperText={errors.title ?? 'One line the client would recognise.'}
-              placeholder="Logo colour wrong on the new banner"
+              placeholder={copy.titlePlaceholder}
             />
 
             <TextField
-              label="Details"
+              label={copy.detailLabel}
               value={values.description}
               onChange={setField('description')}
               size="small"
               fullWidth
               multiline
-              minRows={3}
-              placeholder="What the client said, what they expect, any reference they gave…"
+              minRows={values.kind === 'Complaint' ? 5 : 3}
+              placeholder={copy.detailPlaceholder}
+              helperText={
+                values.kind === 'Complaint'
+                  ? 'Everyone with Client Desk access reads this, so keep it in the client’s own words.'
+                  : undefined
+              }
             />
 
             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
@@ -220,7 +321,7 @@ export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, on
               />
               <TextField
                 type="date"
-                label="Due by"
+                label={copy.dueLabel}
                 value={values.dueDate}
                 onChange={setField('dueDate')}
                 size="small"
@@ -297,9 +398,11 @@ export const TicketFormDialog = ({ ticket, clients, defaultClientId, onClose, on
             Cancel
           </Button>
           <Button type="submit" variant="contained" disabled={submitting}>
-            {submitting ? 'Saving…' : isEditing ? 'Save changes' : 'Raise ticket'}
+            {submitting ? 'Saving…' : isEditing ? 'Save changes' : copy.action}
           </Button>
         </DialogActions>
+        </>
+        )}
       </Box>
     </Dialog>
   )

@@ -1,4 +1,4 @@
-import { apiRequest, toQueryString } from './httpClient'
+import { apiDownload, apiRequest, toQueryString } from './httpClient'
 import { activityService } from './activityService'
 import { taskService } from './taskService'
 
@@ -45,6 +45,11 @@ export const dashboardService = {
 
   getScopeSummary: (workspaceId, { groupId = '', teamId = '', from = '', to = '' } = {}) =>
     apiRequest(`/workspaces/${encodeURIComponent(workspaceId)}/summary${toQueryString({ groupId, teamId, from, to })}`),
+
+  getTracker: (workspaceId, from = '', to = '') =>
+    apiRequest(`/workspaces/${encodeURIComponent(workspaceId)}/daily-tracker${toQueryString({ from, to })}`),
+
+  exportTrackerWorkbook: (workbook) => apiDownload('/dashboard/daily-tracker/export', { method: 'POST', body: workbook }),
 
   getEmployeeStats: () => apiRequest('/dashboard/employees'),
 

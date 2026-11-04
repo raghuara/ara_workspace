@@ -24,6 +24,7 @@ export const PERMISSIONS = {
   CLIENT_CREATE: 'client.create',
   CLIENT_UPDATE: 'client.update',
   CLIENT_DELETE: 'client.delete',
+  CLIENT_COVERAGE_ALL: 'client.coverage.all',
 
   // Client Desk
   TICKET_VIEW: 'ticket.view',
@@ -94,12 +95,16 @@ export const PERMISSION_CATALOG = [
       { key: PERMISSIONS.CLIENT_CREATE, label: 'Add clients' },
       { key: PERMISSIONS.CLIENT_UPDATE, label: 'Edit clients' },
       { key: PERMISSIONS.CLIENT_DELETE, label: 'Delete clients' },
+      {
+        key: PERMISSIONS.CLIENT_COVERAGE_ALL,
+        label: 'See who handles every client — without it they see only their own clients',
+      },
     ],
   },
   {
     key: 'clientdesk',
     label: 'Client Desk',
-    description: 'Complaints, requirements and changes collected from clients',
+    description: 'Feedback, requirements and changes collected from clients',
     permissions: [
       { key: PERMISSIONS.TICKET_VIEW, label: 'Open Client Desk' },
       {

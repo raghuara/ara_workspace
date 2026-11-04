@@ -7,11 +7,13 @@ import {
   Clock3,
   Inbox,
   LayoutList,
+  MessageSquareQuote,
   Plus,
   Rows3,
   Tag,
   TriangleAlert,
   UserRound,
+  UsersRound,
   X,
 } from 'lucide-react'
 import { PageHeader } from '@/components/PageHeader'
@@ -26,7 +28,7 @@ import { ToneChip } from '@/components/ToneChip'
 import { clientService } from '@/api/clientService'
 import { ticketService } from '@/api/ticketService'
 import { PERMISSIONS } from '@/constants/permissions'
-import { TICKET_KINDS, kindOf, roundLabel, statusOf } from '@/constants/clientDesk'
+import { FEEDBACK_KIND, TICKET_KINDS, kindOf, roundLabel, statusOf } from '@/constants/clientDesk'
 import { STATUS_TONES } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
@@ -34,6 +36,8 @@ import { usePermissions } from '@/hooks/usePermissions'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
 import { daysUntil, formatDate } from '@/utils/date'
+import { DeskScoreboard } from './DeskScoreboard'
+import { FeedbackBoard } from './FeedbackBoard'
 import { TicketDetailDrawer } from './TicketDetailDrawer'
 import { TicketFormDialog } from './TicketFormDialog'
 import { TicketTable } from './TicketTable'
@@ -45,6 +49,65 @@ const VIEWS = [
   { key: 'list', label: 'List', icon: LayoutList },
   { key: 'table', label: 'Table', icon: Rows3 },
 ]
+
+const MODES = [
+  { key: 'tickets', label: 'Tickets', icon: Inbox },
+  { key: 'feedback', label: 'Feedback', icon: MessageSquareQuote },
+  { key: 'people', label: 'By person', icon: UsersRound },
+]
+
+const MODE_NOTE = {
+  feedback: 'What clients told us about our work — read it in their own words',
+  people: 'Who handles which clients, and how their tickets stand',
+}
+
+const Segmented = ({ items, value, onChange }) => (
+  <Stack
+    direction="row"
+    sx={{
+      height: CONTROL_HEIGHT,
+      p: 0.375,
+      border: `1px solid ${colors.border}`,
+      borderRadius: 999,
+      bgcolor: colors.page,
+      flexShrink: 0,
+      alignSelf: { xs: 'flex-start', md: 'auto' },
+    }}
+  >
+    {items.map((item) => {
+      const active = value === item.key
+      const Icon = item.icon
+      return (
+        <Box
+          key={item.key}
+          component="button"
+          type="button"
+          onClick={() => onChange(item.key)}
+          aria-pressed={active}
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 0.5,
+            px: 1.25,
+            border: 0,
+            borderRadius: 999,
+            bgcolor: active ? colors.surface : 'transparent',
+            boxShadow: active ? '0 1px 2px rgba(15, 23, 42, 0.12)' : 'none',
+            color: active ? colors.textPrimary : colors.textSecondary,
+            font: 'inherit',
+            fontSize: '0.8125rem',
+            fontWeight: active ? 650 : 500,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          <Icon size={14} strokeWidth={2} aria-hidden="true" />
+          {item.label}
+        </Box>
+      )
+    })}
+  </Stack>
+)
 
 const TABS = [
   { key: 'open', label: 'Open', filters: { openOnly: 'true' }, count: (list) => list.filter((item) => item.isOpen).length },
@@ -285,6 +348,7 @@ export const ClientDeskPage = () => {
 
   const [params, setParams] = useSearchParams()
   const [tab, setTab] = useState(() => (TABS.some((item) => item.key === params.get('tab')) ? params.get('tab') : 'open'))
+  const [mode, setMode] = useState(() => (params.get('mode') === 'people' ? 'people' : 'tickets'))
   const [view, setView] = useState('table')
   const [search, setSearch] = useState('')
   const [clientId, setClientId] = useState(() => params.get('clientId') ?? '')
@@ -346,9 +410,30 @@ export const ClientDeskPage = () => {
 
   const clientOptions = clients.data ?? []
 
+  const changeMode = (next) => {
+    setMode(next)
+    setSearch('')
+    const params2 = new URLSearchParams(params)
+    if (next === 'people') params2.set('mode', 'people')
+    else params2.delete('mode')
+    setParams(params2, { replace: true })
+  }
+
+  const drillTo = ({ ownerId: person, kind: kindValue, tab: nextTab }) => {
+    setOwnerId(person ?? '')
+    setKind(kindValue ?? '')
+    setClientId('')
+    setSearch('')
+    setTab(nextTab ?? 'all')
+    changeMode('tickets')
+  }
+
+  const ticketOwners = new Map(everything.filter((ticket) => ticket.ownerId).map((ticket) => [ticket.ownerId, ticket.ownerName]))
+  assignableMembers.forEach((member) => ticketOwners.set(member.employeeId, member.fullName))
+
   const ownerFilterOptions = [
     { value: '', label: 'Anyone' },
-    ...assignableMembers.map((member) => ({ value: member.employeeId, label: member.fullName })),
+    ...[...ticketOwners].map(([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label)),
   ]
   const clientFilterOptions = [
     { value: '', label: 'All clients' },
@@ -373,8 +458,8 @@ export const ClientDeskPage = () => {
         title="Client Desk"
         description={
           everyClient
-            ? `Every client in ${activeWorkspace?.name ?? 'this workspace'} — complaints, requirements and changes, each with its own token.`
-            : 'What your clients asked for — complaints, requirements and changes, each with its own token.'
+            ? `Every client in ${activeWorkspace?.name ?? 'this workspace'} — feedback, requirements and changes, each with its own token.`
+            : 'What your clients asked for — feedback, requirements and changes, each with its own token.'
         }
         breadcrumbs={[{ label: 'Client Desk' }]}
         actions={
@@ -393,9 +478,9 @@ export const ClientDeskPage = () => {
                   variant="contained"
                   disabled={clientOptions.length === 0}
                   startIcon={<Plus size={16} strokeWidth={2} />}
-                  onClick={() => setCreating(true)}
+                  onClick={() => setCreating(mode === 'feedback' ? FEEDBACK_KIND : true)}
                 >
-                  New ticket
+                  Add from client
                 </Button>
               </span>
             </Tooltip>
@@ -430,79 +515,51 @@ export const ClientDeskPage = () => {
             spacing={1.25}
             sx={{ px: { xs: 1.25, sm: 1.75 }, pt: 1.5, pb: 1.25, alignItems: { md: 'center' } }}
           >
-            <Box
-              sx={{
-                display: 'flex',
-                gap: 0.75,
-                minWidth: 0,
-                overflowX: 'auto',
-                scrollbarWidth: 'none',
-                '&::-webkit-scrollbar': { display: 'none' },
-              }}
-            >
-              {TABS.map((item) => (
-                <TabPill
-                  key={item.key}
-                  label={item.label}
-                  count={item.count(everything)}
-                  active={tab === item.key}
-                  onClick={() => setTab(item.key)}
-                />
-              ))}
-            </Box>
+            <Segmented items={MODES} value={mode} onChange={changeMode} />
+
+            {mode === 'tickets' ? (
+              <Box
+                sx={{
+                  display: 'flex',
+                  gap: 0.75,
+                  minWidth: 0,
+                  overflowX: 'auto',
+                  scrollbarWidth: 'none',
+                  '&::-webkit-scrollbar': { display: 'none' },
+                }}
+              >
+                {TABS.map((item) => (
+                  <TabPill
+                    key={item.key}
+                    label={item.label}
+                    count={item.count(everything)}
+                    active={tab === item.key}
+                    onClick={() => setTab(item.key)}
+                  />
+                ))}
+              </Box>
+            ) : (
+              <Typography variant="caption" sx={{ color: colors.textSecondary }}>
+                {MODE_NOTE[mode]}
+              </Typography>
+            )}
 
             <Box sx={{ flex: 1 }} />
 
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }}>
-              <Stack
-                direction="row"
-                sx={{
-                  height: CONTROL_HEIGHT,
-                  p: 0.375,
-                  border: `1px solid ${colors.border}`,
-                  borderRadius: 999,
-                  bgcolor: colors.page,
-                  flexShrink: 0,
-                }}
-              >
-                {VIEWS.map((item) => {
-                  const active = view === item.key
-                  const Icon = item.icon
-                  return (
-                    <Box
-                      key={item.key}
-                      component="button"
-                      type="button"
-                      onClick={() => setView(item.key)}
-                      aria-pressed={active}
-                      sx={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 0.5,
-                        px: 1.25,
-                        border: 0,
-                        borderRadius: 999,
-                        bgcolor: active ? colors.surface : 'transparent',
-                        boxShadow: active ? '0 1px 2px rgba(15, 23, 42, 0.12)' : 'none',
-                        color: active ? colors.textPrimary : colors.textSecondary,
-                        font: 'inherit',
-                        fontSize: '0.8125rem',
-                        fontWeight: active ? 650 : 500,
-                        cursor: 'pointer',
-                      }}
-                    >
-                      <Icon size={14} strokeWidth={2} aria-hidden="true" />
-                      {item.label}
-                    </Box>
-                  )
-                })}
-              </Stack>
+              {mode === 'tickets' ? <Segmented items={VIEWS} value={view} onChange={setView} /> : null}
 
               <SearchField
                 value={search}
                 onChange={setSearch}
-                label="Search tickets"
-                placeholder="Token, heading or client…"
+                label={mode === 'people' ? 'Find a person' : mode === 'feedback' ? 'Search feedback' : 'Search tickets'}
+                placeholder={
+                  mode === 'people'
+                    ? 'Find a person…'
+                    : mode === 'feedback'
+                      ? 'Client, heading or words…'
+                      : 'Token, heading or client…'
+                }
                 sx={{
                   flex: { xs: 1, md: '0 0 auto' },
                   minWidth: { sm: 250 },
@@ -513,13 +570,14 @@ export const ClientDeskPage = () => {
             </Stack>
           </Stack>
 
+          {mode === 'tickets' ? (
           <Stack
             direction="row"
             spacing={1}
             useFlexGap
             sx={{ px: { xs: 1.25, sm: 1.75 }, pb: 1.5, alignItems: 'center', flexWrap: 'wrap' }}
           >
-            {everyClient ? (
+            {everyClient || ownerId ? (
               <FilterSelect
                 icon={UserRound}
                 label="Anyone"
@@ -556,8 +614,34 @@ export const ClientDeskPage = () => {
               {items.length} {items.length === 1 ? 'ticket' : 'tickets'}
             </Typography>
           </Stack>
+          ) : null}
         </Box>
 
+        {mode === 'feedback' ? (
+          <FeedbackBoard
+            tickets={everything}
+            loading={all.loading && !all.data}
+            error={all.error}
+            onRetry={all.reload}
+            onOpen={setSelected}
+            onAdd={() => setCreating(FEEDBACK_KIND)}
+            canManage={canManage && clientOptions.length > 0}
+            search={debouncedSearch}
+          />
+        ) : mode === 'people' ? (
+          <DeskScoreboard
+            clients={clientOptions}
+            tickets={everything}
+            loading={(all.loading && !all.data) || (clients.loading && !clients.data)}
+            error={all.error ?? clients.error}
+            onRetry={() => {
+              all.reload()
+              clients.reload()
+            }}
+            onDrill={drillTo}
+            search={debouncedSearch}
+          />
+        ) : (
         <QueryStateView error={tickets.error} onRetry={tickets.reload}>
           {tickets.loading && !tickets.data ? (
             <Box sx={{ p: 2 }}>
@@ -572,7 +656,7 @@ export const ClientDeskPage = () => {
                   ? 'An admin assigns clients to you on the Clients page. Their tickets then show up here.'
                   : 'Nothing matches this filter. Try another tab or clear the search.'
               }
-              actionLabel={canManage && clientOptions.length > 0 ? 'Raise a ticket' : undefined}
+              actionLabel={canManage && clientOptions.length > 0 ? 'Add from client' : undefined}
               onAction={canManage && clientOptions.length > 0 ? () => setCreating(true) : undefined}
             />
           ) : view === 'table' ? (
@@ -613,6 +697,7 @@ export const ClientDeskPage = () => {
             </>
           )}
         </QueryStateView>
+        )}
       </SectionCard>
 
       {openTicket ? (
@@ -633,6 +718,7 @@ export const ClientDeskPage = () => {
           ticket={editing}
           clients={clientOptions}
           defaultClientId={clientId}
+          defaultKind={typeof creating === 'string' ? creating : undefined}
           onClose={() => {
             setCreating(false)
             setEditing(null)

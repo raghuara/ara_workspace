@@ -35,7 +35,7 @@ const Badge = ({ workspace, size = 28 }) => {
 }
 
 export const WorkspaceSwitcher = () => {
-  const { workspaces, activeWorkspace, selectWorkspace } = useWorkspace()
+  const { workspaces, activeWorkspace, selectWorkspace, refreshWorkspaces } = useWorkspace()
   const { can } = usePermissions()
   const [anchor, setAnchor] = useState(null)
 
@@ -44,12 +44,17 @@ export const WorkspaceSwitcher = () => {
   const single = workspaces.length <= 1 || !can(PERMISSIONS.WORKSPACE_CREATE)
   const canManage = can(PERMISSIONS.WORKSPACE_VIEW)
 
+  const openMenu = (event) => {
+    setAnchor(event.currentTarget)
+    refreshWorkspaces().catch(() => {})
+  }
+
   return (
     <>
       <Box
         component="button"
         type="button"
-        onClick={single ? undefined : (event) => setAnchor(event.currentTarget)}
+        onClick={single ? undefined : openMenu}
         aria-haspopup={single ? undefined : 'menu'}
         aria-expanded={single ? undefined : open}
         aria-label={single ? `Workspace: ${activeWorkspace.name}` : `Workspace: ${activeWorkspace.name}. Switch workspace`}

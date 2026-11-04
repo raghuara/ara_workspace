@@ -1,21 +1,47 @@
 import { useState } from 'react'
-import { Badge, Box, Button, Collapse, Divider, MenuItem, Stack, Tab, Tabs, TextField } from '@mui/material'
+import {
+  Badge,
+  Box,
+  Button,
+  Collapse,
+  Divider,
+  ListItemIcon,
+  ListItemText,
+  ListSubheader,
+  MenuItem,
+  Stack,
+  Tab,
+  Tabs,
+  TextField,
+} from '@mui/material'
 import { RotateCcw, SlidersHorizontal } from 'lucide-react'
 import { SearchField } from '@/components/SearchField'
+import { UserAvatar } from '@/components/UserAvatar'
 import { PRIORITIES, TASK_SIZES, TASK_TABS } from '@/constants/workspaceDomain'
 import { FEATURES } from '@/constants/features'
 import { useFeatures } from '@/hooks/useFeatures'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors } from '@/theme/tokens'
+import { assigneeChoices } from '../assigneeOptions'
 
 const compactSelect = { minWidth: 140, '& .MuiInputBase-root': { bgcolor: colors.surface } }
+
+const groupHeading = {
+  lineHeight: '30px',
+  fontSize: '0.6875rem',
+  fontWeight: 700,
+  letterSpacing: '0.05em',
+  textTransform: 'uppercase',
+  color: colors.textSecondary,
+  bgcolor: colors.page,
+}
 
 /**
  * The six selects cost a whole row that is rarely in use, so they collapse
  * behind a toggle. Timeframe tabs and search stay visible because they are the
  * ones people reach for constantly.
  */
-export const TaskFilterBar = ({ filters, onChange, onReset, hideGroup, hideTeam, teamScopeGroupId }) => {
+export const TaskFilterBar = ({ filters, onChange, onReset, hideGroup, hideTeam, teamScopeGroupId, teamScopeId }) => {
   const { groups, teams, clients, assignableMembers } = useWorkspace()
   const { isEnabled } = useFeatures()
 
@@ -23,6 +49,35 @@ export const TaskFilterBar = ({ filters, onChange, onReset, hideGroup, hideTeam,
 
   const scopeGroupId = teamScopeGroupId || filters.groupId
   const teamOptions = scopeGroupId ? teams.filter((team) => team.groupId === scopeGroupId) : teams
+
+  // On a team or group screen the people who work there come first; the rest of
+  // the workspace stays reachable underneath.
+  const people = assigneeChoices({
+    team: teams.find((team) => team.id === (teamScopeId || filters.teamId)),
+    group: groups.find((group) => group.id === scopeGroupId),
+    members: assignableMembers,
+    selectedIds: filters.assigneeId ? [filters.assigneeId] : [],
+  })
+
+  const nameOfAssignee = (value) => {
+    if (!value) return ''
+    if (value === 'none') return 'Nobody yet'
+    const match = [...people.inScope, ...people.rest].find((person) => person.employeeId === value)
+    return match?.fullName ?? ''
+  }
+
+  const personItem = (person) => (
+    <MenuItem key={person.employeeId} value={person.employeeId}>
+      <ListItemIcon sx={{ minWidth: 36 }}>
+        <UserAvatar name={person.fullName} size={26} />
+      </ListItemIcon>
+      <ListItemText
+        primary={person.fullName}
+        secondary={person.oversees ? `${person.designation || 'Oversees'} · oversees` : person.designation}
+        slotProps={{ primary: { fontSize: '0.875rem' }, secondary: { fontSize: '0.75rem' } }}
+      />
+    </MenuItem>
+  )
 
   // Only count filters actually reachable on this screen — a route-scoped group
   // is not something the person can clear from here.
@@ -144,13 +199,40 @@ export const TaskFilterBar = ({ filters, onChange, onReset, hideGroup, hideTeam,
             </TextField>
           )}
 
-          <TextField select size="small" label="Assignee" value={filters.assigneeId} onChange={set('assigneeId')} sx={compactSelect}>
+          <TextField
+            select
+            size="small"
+            label="Assignee"
+            value={filters.assigneeId}
+            onChange={set('assigneeId')}
+            sx={{ ...compactSelect, minWidth: 170 }}
+            slotProps={{
+              select: {
+                renderValue: nameOfAssignee,
+                MenuProps: { slotProps: { paper: { sx: { maxHeight: 380, minWidth: 248 } } } },
+              },
+            }}
+          >
             <MenuItem value="">Anyone</MenuItem>
-            {assignableMembers.map((member) => (
-              <MenuItem key={member.employeeId} value={member.employeeId}>
-                {member.fullName}
-              </MenuItem>
-            ))}
+            <MenuItem value="none">
+              <ListItemText
+                primary="Nobody yet"
+                secondary="Waiting to be handed out"
+                slotProps={{ primary: { fontSize: '0.875rem' }, secondary: { fontSize: '0.75rem' } }}
+              />
+            </MenuItem>
+
+            {people.scoped ? <ListSubheader sx={groupHeading}>{people.label}</ListSubheader> : null}
+            {(people.scoped ? people.inScope : assignableMembers).map(personItem)}
+
+            {people.scoped && people.rest.length > 0
+              ? [
+                  <ListSubheader key="rest-head" sx={groupHeading}>
+                    Elsewhere in this workspace
+                  </ListSubheader>,
+                  ...people.rest.map(personItem),
+                ]
+              : null}
           </TextField>
 
           <TextField select size="small" label="Priority" value={filters.priority} onChange={set('priority')} sx={compactSelect}>

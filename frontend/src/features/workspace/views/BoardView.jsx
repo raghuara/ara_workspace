@@ -1,8 +1,9 @@
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { Alert, Box, Button, IconButton, Stack, Tooltip, Typography } from '@mui/material'
 import { keyframes } from '@mui/material/styles'
 import { Plus } from 'lucide-react'
+import { AutoLoadMore } from '@/components/AutoLoadMore'
 import { StatusChip } from '@/components/StatusChip'
 import { GroupMenu } from '../components/GroupMenu'
 import { QuickAddCard } from '../components/QuickAddCard'
@@ -25,6 +26,7 @@ const TOUCH_HOLD_MS = 220
 const SCROLL_EDGE = 48
 const SCROLL_SPEED = 14
 const SETTLE_MS = 360
+const PAGE_SIZE = 30
 
 const lift = keyframes`
   from { transform: none; }
@@ -136,6 +138,12 @@ export const BoardView = ({
   const [moveError, setMoveError] = useState(null)
   const [composerColumnId, setComposerColumnId] = useState(null)
   const [editingTaskId, setEditingTaskId] = useState(null)
+  const [limits, setLimits] = useState({})
+
+  const showMore = useCallback(
+    (columnId) => setLimits((current) => ({ ...current, [columnId]: (current[columnId] ?? PAGE_SIZE) + PAGE_SIZE })),
+    [],
+  )
 
   const scrollerRef = useRef(null)
   const overlayRef = useRef(null)
@@ -290,7 +298,7 @@ export const BoardView = ({
           ? current.columns.find((item) => item.kind === 'completed')
           : current.columns.find((item) => item.id === extra.columnId)
       if (!to || to.id === task.statusId) return
-      commitMove(task, task.statusId, fromIndex, { columnId: to.id, index: to.tasks.length })
+      commitMove(task, task.statusId, fromIndex, { columnId: to.id, index: 0 })
       return
     }
 
@@ -311,6 +319,24 @@ export const BoardView = ({
         const latest = boardRef.current
         if (latest) onBoardChange({ ...latest, columns: patchTask(latest.columns, task.id, { title: task.title }) })
         setMoveError(error?.message ?? 'The task could not be renamed.')
+      }
+      return
+    }
+
+    if (type === 'assign') {
+      const before = { assigneeIds: task.assigneeIds ?? [], assignees: task.assignees ?? [] }
+      onBoardChange({
+        ...current,
+        columns: patchTask(current.columns, task.id, { assigneeIds: extra.assigneeIds, assignees: extra.assignees }),
+      })
+      try {
+        const saved = await taskService.updateTask(task.id, { assigneeIds: extra.assigneeIds })
+        const latest = boardRef.current
+        if (latest) onBoardChange({ ...latest, columns: patchTask(latest.columns, task.id, saved) })
+      } catch (error) {
+        const latest = boardRef.current
+        if (latest) onBoardChange({ ...latest, columns: patchTask(latest.columns, task.id, before) })
+        setMoveError(error?.message ?? 'The assignees could not be changed.')
       }
       return
     }
@@ -508,6 +534,20 @@ export const BoardView = ({
     onOpenTask?.(task)
   }
 
+  const handlersRef = useRef(null)
+  useLayoutEffect(() => {
+    handlersRef.current = { openTask, handleCardAction, handlePointerDown }
+  })
+  const stableOpen = useCallback((task) => handlersRef.current?.openTask(task), [])
+  const stableAction = useCallback(
+    (type, task, extra) => handlersRef.current?.handleCardAction(type, task, extra),
+    [],
+  )
+  const stablePointerDown = useCallback(
+    (event, task, columnId, index) => handlersRef.current?.handlePointerDown(event, task, columnId, index),
+    [],
+  )
+
   if (loading && !board) {
     return (
       <Stack direction="row" spacing={2}>
@@ -552,7 +592,10 @@ export const BoardView = ({
           const tone = STATUS_TONES[column.tone] ?? STATUS_TONES.slate
           const isDropTarget = Boolean(drag) && target?.columnId === column.id
 
-          const cards = column.tasks.map((task, index) =>
+          const limit = limits[column.id] ?? PAGE_SIZE
+          const hidden = Math.max(0, column.tasks.length - limit)
+
+          const cards = column.tasks.slice(0, limit).map((task, index) =>
             editingTaskId === task.id ? (
               <QuickAddCard
                 key={task.id}
@@ -572,12 +615,14 @@ export const BoardView = ({
                 key={task.id}
                 task={task}
                 columns={columns}
+                columnId={column.id}
+                index={index}
                 draggable={canMove && canMoveTask(task)}
                 isDragging={drag?.task.id === task.id}
                 isSettling={settledId === task.id}
-                onOpen={openTask}
-                onAction={handleCardAction}
-                onPointerDown={(event) => handlePointerDown(event, task, column.id, index)}
+                onOpen={stableOpen}
+                onAction={stableAction}
+                onPointerDown={stablePointerDown}
               />
             ),
           )
@@ -678,6 +723,17 @@ export const BoardView = ({
                 sx={{ p: 1, minHeight: 110, maxHeight: { xs: 'none', sm: 'calc(100dvh - 292px)' }, overflowY: 'auto' }}
               >
                 {cards}
+
+                {hidden > 0 ? (
+                  <AutoLoadMore
+                    hidden={hidden}
+                    step={PAGE_SIZE}
+                    onMore={() => showMore(column.id)}
+                    scrollRoot="[data-column-list]"
+                    color={tone.strong}
+                    sx={{ bgcolor: 'rgba(255, 255, 255, 0.55)', '&:hover': { bgcolor: 'rgba(255, 255, 255, 0.85)' } }}
+                  />
+                ) : null}
 
                 {column.tasks.length === 0 && !isDropTarget ? (
                   <Box

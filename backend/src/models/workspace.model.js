@@ -243,11 +243,13 @@ const countTasksInGroup = async (groupId) => {
 
 const findTeamsByWorkspace = async (workspaceId) => {
   const [rows] = await pool.query(
-    `SELECT t.id, t.group_id, t.name, t.lead_id,
-            CONCAT(l.first_name, ' ', l.last_name) AS lead_name
+    `SELECT t.id, t.group_id, t.name, t.lead_id, t.assign_mode, t.assigner_id,
+            CONCAT(l.first_name, ' ', l.last_name) AS lead_name,
+            CONCAT(a.first_name, ' ', a.last_name) AS assigner_name
      FROM teams t
      JOIN workspace_groups g ON g.id = t.group_id
      LEFT JOIN employees l ON l.employee_id = t.lead_id
+     LEFT JOIN employees a ON a.employee_id = t.assigner_id
      WHERE g.workspace_id = ?
      ORDER BY t.created_at, t.id`,
     [workspaceId]
@@ -257,11 +259,13 @@ const findTeamsByWorkspace = async (workspaceId) => {
 
 const findTeamById = async (teamId, connection = pool) => {
   const [rows] = await connection.query(
-    `SELECT t.id, t.group_id, t.name, t.lead_id, g.workspace_id,
-            CONCAT(l.first_name, ' ', l.last_name) AS lead_name
+    `SELECT t.id, t.group_id, t.name, t.lead_id, t.assign_mode, t.assigner_id, g.workspace_id,
+            CONCAT(l.first_name, ' ', l.last_name) AS lead_name,
+            CONCAT(a.first_name, ' ', a.last_name) AS assigner_name
      FROM teams t
      JOIN workspace_groups g ON g.id = t.group_id
      LEFT JOIN employees l ON l.employee_id = t.lead_id
+     LEFT JOIN employees a ON a.employee_id = t.assigner_id
      WHERE t.id = ? LIMIT 1`,
     [teamId]
   );
@@ -270,7 +274,7 @@ const findTeamById = async (teamId, connection = pool) => {
 
 const findTeamMembersByWorkspace = async (workspaceId) => {
   const [rows] = await pool.query(
-    `SELECT tm.team_id, tm.employee_id, CONCAT(e.first_name, ' ', e.last_name) AS full_name
+    `SELECT tm.team_id, tm.employee_id, tm.role, CONCAT(e.first_name, ' ', e.last_name) AS full_name, e.designation
      FROM team_members tm
      JOIN teams t ON t.id = tm.team_id
      JOIN workspace_groups g ON g.id = t.group_id
@@ -290,26 +294,45 @@ const findTeamMemberIds = async (teamId, connection = pool) => {
   return rows.map((row) => row.employee_id);
 };
 
+// Who oversees rather than does the work. Everyone else on the team counts as
+// a worker, which is what averages and workload are measured against.
+const findTeamSupervisorIds = async (teamId, connection = pool) => {
+  const [rows] = await connection.query(
+    "SELECT employee_id FROM team_members WHERE team_id = ? AND role = 'supervisor'",
+    [teamId]
+  );
+  return rows.map((row) => row.employee_id);
+};
+
 const insertTeam = async (team, connection) => {
-  await connection.query("INSERT INTO teams (id, group_id, name, lead_id) VALUES (?, ?, ?, ?)", [
+  await connection.query("INSERT INTO teams (id, group_id, name, lead_id, assign_mode, assigner_id) VALUES (?, ?, ?, ?, ?, ?)", [
     team.id,
     team.groupId,
     team.name,
-    team.leadId
+    team.leadId,
+    team.assignMode,
+    team.assignerId
   ]);
 };
 
 const updateTeam = async (teamId, team, connection) => {
-  await connection.query("UPDATE teams SET name = ?, lead_id = ? WHERE id = ?", [team.name, team.leadId, teamId]);
+  await connection.query("UPDATE teams SET name = ?, lead_id = ?, assign_mode = ?, assigner_id = ? WHERE id = ?", [
+    team.name,
+    team.leadId,
+    team.assignMode,
+    team.assignerId,
+    teamId
+  ]);
 };
 
-const replaceTeamMembers = async (teamId, memberIds, connection) => {
+const replaceTeamMembers = async (teamId, memberIds, supervisorIds = [], connection) => {
   await connection.query("DELETE FROM team_members WHERE team_id = ?", [teamId]);
-  if (memberIds.length > 0) {
-    await connection.query("INSERT INTO team_members (team_id, employee_id) VALUES ?", [
-      memberIds.map((employeeId) => [teamId, employeeId])
-    ]);
-  }
+  if (memberIds.length === 0) return;
+
+  const oversees = new Set(supervisorIds);
+  await connection.query("INSERT INTO team_members (team_id, employee_id, role) VALUES ?", [
+    memberIds.map((employeeId) => [teamId, employeeId, oversees.has(employeeId) ? "supervisor" : "worker"])
+  ]);
 };
 
 const deleteTeam = async (teamId) => {
@@ -432,6 +455,7 @@ module.exports = {
   findTeamById,
   findTeamMembersByWorkspace,
   findTeamMemberIds,
+  findTeamSupervisorIds,
   insertTeam,
   updateTeam,
   replaceTeamMembers,

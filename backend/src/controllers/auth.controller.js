@@ -1,13 +1,11 @@
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 const userModel = require("../models/user.model");
 const workspaceModel = require("../models/workspace.model");
 const adminModel = require("../models/admin.model");
 const accountModel = require("../models/account.model");
 const { PASSWORD_PATTERN, PASSWORD_RULE } = require("./account.controller");
 const { effectivePermissions } = require("../services/permissions.service");
-
-const TOKEN_EXPIRES_IN = "8h";
+const { signSession, isRevoked } = require("../utils/token");
 
 const INVALID_CREDENTIALS = {
   message: "The email or password is incorrect.",
@@ -68,15 +66,11 @@ const login = async (req, res) => {
     });
   }
 
-  const token = jwt.sign(
-    {
-      userId: user.id,
-      employeeId: user.employee_id,
-      userTypeId: user.user_type_id
-    },
-    process.env.JWT_SECRET,
-    { expiresIn: TOKEN_EXPIRES_IN }
-  );
+  const token = signSession({
+    userId: user.id,
+    employeeId: user.employee_id,
+    userTypeId: user.user_type_id
+  });
 
   await accountModel.touchLastLogin(user.id);
 
@@ -111,6 +105,12 @@ const changePassword = async (req, res) => {
   }
 
   await accountModel.setPassword(user.id, await bcrypt.hash(newPassword, 10), false);
+
+  // Other devices are now logged out; this one carries on with a fresh token.
+  res.setHeader(
+    "X-Session-Token",
+    signSession({ userId: user.id, employeeId: user.employee_id, userTypeId: user.user_type_id })
+  );
   res.json(await buildSession(await userModel.findUserById(user.id)));
 };
 
@@ -121,6 +121,13 @@ const me = async (req, res) => {
     return res.status(401).json({
       message: "Your session is no longer valid. Please log in again.",
       code: "UNAUTHORIZED"
+    });
+  }
+
+  if (isRevoked(user, req.user)) {
+    return res.status(401).json({
+      message: "Your password changed, so this session ended. Please log in again.",
+      code: "TOKEN_INVALID"
     });
   }
 

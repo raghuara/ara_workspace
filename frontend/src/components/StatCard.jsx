@@ -17,6 +17,8 @@ export const StatCard = ({
   dense = false,
   progress,
   emphasis = false,
+  onClick,
+  actionLabel,
 }) => {
   const palette = STATUS_TONES[tone] ?? STATUS_TONES.blue
   const badge = dense ? 30 : 34
@@ -24,8 +26,20 @@ export const StatCard = ({
 
   return (
     <Box
+      {...(onClick
+        ? {
+            component: 'button',
+            type: 'button',
+            onClick,
+            'aria-label': actionLabel ?? `${label}: see details`,
+          }
+        : {})}
       sx={{
         height: '100%',
+        width: '100%',
+        textAlign: 'left',
+        font: 'inherit',
+        cursor: onClick ? 'pointer' : 'inherit',
         display: 'flex',
         flexDirection: 'column',
         p: dense ? { xs: 1.25, md: 1.5 } : { xs: 1.5, md: 1.75 },

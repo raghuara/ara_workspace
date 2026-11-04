@@ -14,7 +14,7 @@ import {
   Tooltip,
   Typography,
 } from '@mui/material'
-import { Check, Clock3, Pencil, RotateCcw, Send, TriangleAlert, X } from 'lucide-react'
+import { Check, Clock3, Pencil, Quote, RotateCcw, Send, TriangleAlert, X } from 'lucide-react'
 import { DefinitionList } from '@/components/DefinitionList'
 import { LinkifiedText } from '@/components/LinkifiedText'
 import { QueryStateView } from '@/components/QueryStateView'
@@ -23,7 +23,7 @@ import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { TaskAttachments } from '@/features/workspace/components/TaskAttachments'
 import { ticketService } from '@/api/ticketService'
-import { NEXT_STATUSES, STATUS_ACTIONS, kindOf, roundLabel, statusOf } from '@/constants/clientDesk'
+import { FEEDBACK_KIND, NEXT_STATUSES, STATUS_ACTIONS, changeRounds, kindOf, roundLabel, statusOf } from '@/constants/clientDesk'
 import { PRIORITY_TONES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { colors } from '@/theme/tokens'
@@ -40,6 +40,206 @@ const dueText = (ticket) => {
 }
 
 const ACTION_ICONS = { Completed: Check, Reopened: RotateCcw, 'With client': Send }
+
+const FLOW = ['New', 'In progress', 'With client', 'Completed']
+
+const flowIndex = (status) => (status === 'Reopened' ? 1 : FLOW.indexOf(status))
+
+const FlowSteps = ({ status, reopenCount }) => {
+  const current = flowIndex(status)
+  return (
+    <Stack direction="row" sx={{ alignItems: 'stretch', mb: 2 }}>
+      {FLOW.map((step, index) => {
+        const done = index < current
+        const here = index === current
+        const label = here && status === 'Reopened' ? 'Reopened' : step
+        const tone = STATUS_TONES[statusOf(label).tone]
+        return (
+          <Box key={step} sx={{ flex: 1, minWidth: 0, textAlign: 'center' }}>
+            <Stack direction="row" sx={{ alignItems: 'center' }}>
+              <Box sx={{ flex: 1, height: 2, bgcolor: index === 0 ? 'transparent' : done || here ? tone.border : colors.border }} />
+              <Box
+                sx={{
+                  width: 22,
+                  height: 22,
+                  flexShrink: 0,
+                  display: 'grid',
+                  placeItems: 'center',
+                  borderRadius: '50%',
+                  bgcolor: done ? STATUS_TONES.green.strong : here ? tone.strong : colors.surface,
+                  border: `2px solid ${done ? STATUS_TONES.green.strong : here ? tone.strong : colors.border}`,
+                  color: '#FFFFFF',
+                }}
+              >
+                {done ? <Check size={12} strokeWidth={3} aria-hidden="true" /> : null}
+              </Box>
+              <Box sx={{ flex: 1, height: 2, bgcolor: index === FLOW.length - 1 ? 'transparent' : done ? STATUS_TONES.green.border : colors.border }} />
+            </Stack>
+            <Typography
+              variant="caption"
+              component="p"
+              noWrap
+              sx={{ mt: 0.5, fontWeight: here ? 700 : 500, color: here ? tone.strong : colors.textSecondary }}
+            >
+              {label}
+            </Typography>
+            {here && reopenCount > 0 ? (
+              <Typography variant="caption" component="p" sx={{ color: STATUS_TONES.orange.strong, fontWeight: 600 }}>
+                {roundLabel(reopenCount).toLowerCase()}
+              </Typography>
+            ) : null}
+          </Box>
+        )
+      })}
+    </Stack>
+  )
+}
+
+const ClientWords = ({ ticket, kind }) => {
+  const tone = STATUS_TONES[kind.tone]
+  const isFeedback = ticket.kind === FEEDBACK_KIND
+  return (
+    <Box
+      sx={{
+        mb: 2,
+        borderRadius: 2.5,
+        bgcolor: isFeedback ? tone.soft : colors.page,
+        border: `1px solid ${isFeedback ? tone.border : colors.border}`,
+        borderLeft: `4px solid ${tone.strong}`,
+        overflow: 'hidden',
+      }}
+    >
+      <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', px: 1.75, pt: 1.25 }}>
+        <Quote size={13} strokeWidth={2} color={tone.strong} aria-hidden="true" />
+        <Typography
+          variant="caption"
+          sx={{ fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: tone.strong }}
+        >
+          {isFeedback ? 'What the client said' : 'What they asked for'}
+        </Typography>
+        <Box sx={{ flex: 1 }} />
+        <Typography variant="caption" noWrap sx={{ color: colors.textSecondary }}>
+          {ticket.collectedOn ? formatDate(ticket.collectedOn) : ''}
+        </Typography>
+      </Stack>
+      <Box
+        sx={{
+          px: 1.75,
+          py: 1.25,
+          fontSize: isFeedback ? '0.9375rem' : '0.875rem',
+          lineHeight: 1.7,
+          color: colors.textPrimary,
+        }}
+      >
+        <LinkifiedText text={ticket.description} />
+      </Box>
+      <Typography
+        variant="caption"
+        component="p"
+        sx={{ px: 1.75, pb: 1.25, color: colors.textSecondary }}
+      >
+        Collected by {ticket.raisedByName}
+      </Typography>
+    </Box>
+  )
+}
+
+/** Round 1 is the original ask; every send-back starts the next one. */
+const buildRounds = (ticket, events) => {
+  const backs = [...(events ?? [])]
+    .filter((entry) => entry.action === 'reopened')
+    .sort((a, b) => (a.at ?? '').localeCompare(b.at ?? ''))
+
+  return [
+    {
+      number: 1,
+      at: ticket.collectedOn ?? ticket.createdAt,
+      note: ticket.description,
+      by: ticket.raisedByName,
+      first: true,
+    },
+    ...backs.map((entry, index) => ({
+      number: index + 2,
+      at: entry.at,
+      note: entry.detail?.note ?? '',
+      by: entry.actorName,
+      first: false,
+    })),
+  ]
+}
+
+const RoundTrail = ({ rounds, status }) => (
+  <Box sx={{ mb: 2.5 }}>
+    <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
+      <RotateCcw size={14} strokeWidth={2} color={STATUS_TONES.orange.strong} aria-hidden="true" />
+      <Typography variant="subtitle2" component="p" sx={{ color: STATUS_TONES.orange.strong }}>
+        {changeRounds(rounds.length - 1)}
+      </Typography>
+    </Stack>
+
+    <Stack component="ol" spacing={1} sx={{ listStyle: 'none', m: 0, p: 0 }}>
+      {rounds.map((round, index) => {
+        const current = index === rounds.length - 1 && status !== 'Completed'
+        return (
+          <Stack
+            key={round.number}
+            component="li"
+            direction="row"
+            spacing={1.25}
+            sx={{
+              px: 1.25,
+              py: 1,
+              borderRadius: 2,
+              bgcolor: current ? STATUS_TONES.orange.soft : colors.page,
+              border: `1px solid ${current ? STATUS_TONES.orange.border : colors.border}`,
+            }}
+          >
+            <Box
+              sx={{
+                width: 24,
+                height: 24,
+                flexShrink: 0,
+                display: 'grid',
+                placeItems: 'center',
+                borderRadius: '50%',
+                bgcolor: round.first ? STATUS_TONES.blue.strong : STATUS_TONES.orange.strong,
+                color: '#FFFFFF',
+                fontSize: '0.6875rem',
+                fontWeight: 800,
+              }}
+            >
+              {round.number}
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0 }}>
+              <Stack direction="row" spacing={0.75} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                  {round.first ? 'First ask' : `Change ${round.number - 1}`}
+                </Typography>
+                <Typography variant="caption" sx={{ color: colors.textSecondary }}>
+                  {round.at ? formatDate(round.at) : ''} · {round.by}
+                </Typography>
+                {current ? <ToneChip label="Working on this" tone="orange" /> : null}
+              </Stack>
+              <Typography
+                variant="body2"
+                sx={{
+                  mt: 0.25,
+                  display: '-webkit-box',
+                  WebkitLineClamp: 3,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  whiteSpace: 'pre-wrap',
+                }}
+              >
+                {round.note || '—'}
+              </Typography>
+            </Box>
+          </Stack>
+        )
+      })}
+    </Stack>
+  </Box>
+)
 
 const StatusDialog = ({ ticket, target, onClose, onDone }) => {
   const reopening = target === 'Reopened'
@@ -127,6 +327,7 @@ export const TicketDetailDrawer = ({ ticket, canManage, onClose, onChanged, onEd
   const status = statusOf(ticket.status)
   const kind = kindOf(ticket.kind)
   const tone = STATUS_TONES[status.tone]
+  const rounds = buildRounds(ticket, events.data)
 
   const sendNote = async () => {
     if (!note.trim()) return
@@ -203,6 +404,8 @@ export const TicketDetailDrawer = ({ ticket, canManage, onClose, onChanged, onEd
       </Box>
 
       <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto', p: 2 }}>
+        <FlowSteps status={ticket.status} reopenCount={ticket.reopenCount ?? 0} />
+
         {canManage ? (
           <Stack direction="row" spacing={0.75} useFlexGap sx={{ flexWrap: 'wrap', mb: 2 }}>
             {(NEXT_STATUSES[ticket.status] ?? []).map((next) => {
@@ -230,11 +433,9 @@ export const TicketDetailDrawer = ({ ticket, canManage, onClose, onChanged, onEd
           </Stack>
         ) : null}
 
-        {ticket.description ? (
-          <Box sx={{ px: 1.5, py: 1.25, mb: 2, borderRadius: 2, bgcolor: colors.page, border: `1px solid ${colors.border}` }}>
-            <LinkifiedText text={ticket.description} />
-          </Box>
-        ) : null}
+        {ticket.description ? <ClientWords ticket={ticket} kind={kind} /> : null}
+
+        {(ticket.reopenCount ?? 0) > 0 ? <RoundTrail rounds={rounds} status={ticket.status} /> : null}
 
         <DefinitionList
           columns={{ xs: 1, sm: 2 }}

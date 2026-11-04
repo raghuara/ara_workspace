@@ -18,7 +18,6 @@ import { keyframes } from '@mui/material/styles'
 import {
   AlignLeft,
   CalendarDays,
-  Check,
   CornerDownLeft,
   Flag,
   Gauge,
@@ -38,11 +37,14 @@ import { FEATURES } from '@/constants/features'
 import { useFeatures } from '@/hooks/useFeatures'
 import { usePermissions } from '@/hooks/usePermissions'
 import { PERMISSIONS } from '@/constants/permissions'
+import { USER_TYPE } from '@/constants/userTypes'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { useAccess } from '@/hooks/useAccess'
+
 import { useSession } from '@/hooks/useSession'
 import { colors } from '@/theme/tokens'
 import { daysFromNow, formatRelativeDay, toIsoDate } from '@/utils/date'
+import { AssigneePicker } from './AssigneePicker'
 
 const pop = keyframes`
   from { opacity: 0; transform: translateY(-4px) scale(0.98); }
@@ -51,7 +53,7 @@ const pop = keyframes`
 
 const stop = (event) => event.stopPropagation()
 
-const EMPLOYEE_TYPE_ID = 3
+
 
 const QuickRow = ({ icon: Icon, label, filled, required, missing, onClick, readOnly = false, children }) => (
   <Box
@@ -107,7 +109,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
   const { userType } = useSession()
   const canAssign = can(PERMISSIONS.TASK_ASSIGN)
   const canSize = can(PERMISSIONS.TASK_WEIGHTAGE_SET)
-  const canWriteDescription = (userType?.id !== EMPLOYEE_TYPE_ID || isAdmin) && can(PERMISSIONS.TASK_UPDATE)
+  const canWriteDescription = (userType?.id !== USER_TYPE.EMPLOYEE || isAdmin) && can(PERMISSIONS.TASK_UPDATE)
   const canAttach = can(PERMISSIONS.TASK_UPDATE)
   const weightageOn = isEnabled(FEATURES.WEIGHTAGE)
   const scheduled = column.kind === 'scheduled'
@@ -130,6 +132,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
   const [queued, setQueued] = useState([])
   const [note, setNote] = useState('')
   const [menu, setMenu] = useState(null)
+  const [assignAnchor, setAssignAnchor] = useState(null)
   const [missing, setMissing] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState(null)
@@ -162,6 +165,10 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
   const team = teamOptions.find((item) => item.id === values.teamId)
   const client = clients.find((item) => item.id === values.clientId)
   const assignees = assignableMembers.filter((member) => values.assigneeIds.includes(member.employeeId))
+  // Teams that hand work out afterwards can file a task with nobody on it.
+  const leadAssigns = team?.assignMode === 'lead'
+  const assignerName = team?.assignerName ? team.assignerName.split(' ')[0] : 'the lead'
+  const assigneeRequired = !leadAssigns
   const size = sizeByKey(values.sizeKey)
   const priorityTone = STATUS_TONES[PRIORITY_TONES[values.priority] ?? 'gray']
 
@@ -192,7 +199,7 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
     if (!title.trim()) problems.title = true
     if (!values.clientId) problems.clientId = true
     if (!values.groupId) problems.groupId = true
-    if (canAssign && values.assigneeIds.length === 0) problems.assigneeIds = true
+    if (canAssign && assigneeRequired && values.assigneeIds.length === 0) problems.assigneeIds = true
     setMissing(problems)
     if (Object.keys(problems).length > 0) {
       if (problems.title) inputRef.current?.focus()
@@ -306,11 +313,11 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
         {canAssign ? (
           <QuickRow
             icon={UserRound}
-            label="Add assignee"
-            required
+            label={leadAssigns ? `Add assignee — or leave it to ${assignerName}` : 'Add assignee'}
+            required={assigneeRequired}
             filled={assignees.length > 0}
             missing={missing.assigneeIds}
-            onClick={openMenu('assignee')}
+            onClick={(event) => setAssignAnchor(event.currentTarget)}
           >
             {assignees.length > 0 ? (
               <>
@@ -508,35 +515,6 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
         onPointerDown={stop}
         slotProps={{ paper: { sx: { minWidth: 220, maxHeight: 320 } } }}
       >
-        {menu?.kind === 'assignee'
-          ? assignableMembers.map((member) => {
-              const selected = values.assigneeIds.includes(member.employeeId)
-              return (
-                <MenuItem
-                  key={member.employeeId}
-                  selected={selected}
-                  onClick={() =>
-                    set({
-                      assigneeIds: selected
-                        ? values.assigneeIds.filter((id) => id !== member.employeeId)
-                        : [...values.assigneeIds, member.employeeId],
-                    })
-                  }
-                >
-                  <ListItemIcon>
-                    <UserAvatar name={member.fullName} size={24} />
-                  </ListItemIcon>
-                  <ListItemText
-                    primary={member.fullName}
-                    secondary={member.designation}
-                    slotProps={{ primary: { fontSize: '0.8125rem' }, secondary: { fontSize: '0.75rem' } }}
-                  />
-                  {selected ? <Check size={15} strokeWidth={2} color={colors.brand} aria-hidden="true" /> : null}
-                </MenuItem>
-              )
-            })
-          : null}
-
         {menu?.kind === 'priority'
           ? Object.values(PRIORITIES).map((priority) => (
               <MenuItem
@@ -652,6 +630,19 @@ export const QuickAddCard = ({ column, task = null, defaultGroupId, defaultTeamI
             ))
           : null}
       </Menu>
+
+      {assignAnchor ? (
+        <AssigneePicker
+          anchorEl={assignAnchor}
+          team={team}
+          group={group}
+          members={assignableMembers}
+          value={values.assigneeIds}
+          title="Who will do this?"
+          onClose={() => setAssignAnchor(null)}
+          onSave={(assigneeIds) => set({ assigneeIds })}
+        />
+      ) : null}
 
       <Popover
         anchorEl={menu?.anchor ?? null}

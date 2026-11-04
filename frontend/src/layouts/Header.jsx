@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Badge, Box, Divider, IconButton, Menu, MenuItem, Stack, Tooltip, Typography } from '@mui/material'
-import { Bell, BellOff, Check, ChevronDown, KeyRound, LogOut, Menu as MenuIcon, ShieldCheck } from 'lucide-react'
+import { Bell, BellOff, ChevronDown, KeyRound, LogOut, Menu as MenuIcon, ShieldCheck } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
@@ -39,20 +39,9 @@ const itemSx = {
   alignItems: 'center',
 }
 
-const sectionLabelSx = {
-  px: 2,
-  pt: 1,
-  pb: 0.5,
-  fontSize: '0.6875rem',
-  fontWeight: 700,
-  letterSpacing: '0.07em',
-  textTransform: 'uppercase',
-  color: colors.textSecondary,
-}
-
 export const Header = ({ onOpenSidebar }) => {
   const navigate = useNavigate()
-  const { user, role, roles, switchRole, logout } = useSession()
+  const { user, role, logout } = useSession()
   const { activeWorkspace } = useWorkspace()
   const inbox = useAsync(notificationService.listNotifications, [])
   const notifications = inbox.data?.items ?? []
@@ -89,11 +78,6 @@ export const Header = ({ onOpenSidebar }) => {
       // ignore
     }
     inbox.reload()
-  }
-
-  const handleRoleChange = async (roleId) => {
-    setProfileAnchor(null)
-    if (roleId !== role?.id) await switchRole(roleId)
   }
 
   return (
@@ -277,53 +261,6 @@ export const Header = ({ onOpenSidebar }) => {
             <ToneChip label={role?.name ?? 'Member'} tone="blue" icon={ShieldCheck} />
           </Box>
         </Stack>
-
-        {roles.length > 1 ? (
-          <Box>
-            <Typography component="p" sx={sectionLabelSx}>
-              Switch role
-            </Typography>
-            {roles.map((option) => {
-              const selected = option.id === role?.id
-              return (
-                <MenuItem
-                  key={option.id}
-                  selected={selected}
-                  onClick={() => handleRoleChange(option.id)}
-                  sx={{ ...itemSx, '&.Mui-selected': { bgcolor: colors.brandSoft, '&:hover': { bgcolor: colors.brandTint } } }}
-                >
-                  <Box
-                    aria-hidden="true"
-                    sx={{
-                      width: 18,
-                      height: 18,
-                      borderRadius: '50%',
-                      flexShrink: 0,
-                      display: 'grid',
-                      placeItems: 'center',
-                      border: `2px solid ${selected ? colors.brand : colors.border}`,
-                      bgcolor: selected ? colors.brand : 'transparent',
-                      color: '#FFFFFF',
-                    }}
-                  >
-                    {selected ? <Check size={11} strokeWidth={3} /> : null}
-                  </Box>
-                  <Box sx={{ minWidth: 0, flex: 1 }}>
-                    <Typography variant="body2" noWrap sx={{ fontWeight: selected ? 650 : 500, lineHeight: 1.3 }}>
-                      {option.name}
-                    </Typography>
-                    {option.description ? (
-                      <Typography variant="caption" component="p" noWrap sx={{ lineHeight: 1.3 }}>
-                        {option.description}
-                      </Typography>
-                    ) : null}
-                  </Box>
-                </MenuItem>
-              )
-            })}
-            <Divider sx={{ my: 0.75 }} />
-          </Box>
-        ) : null}
 
         <MenuItem
           onClick={() => {

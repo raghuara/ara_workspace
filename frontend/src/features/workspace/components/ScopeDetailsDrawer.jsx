@@ -22,8 +22,14 @@ const ROLE_TONES = { Admin: 'blue', Lead: 'violet', 'Team lead': 'teal', Member:
 const goodWhenHigh = (percent) => (percent >= 75 ? 'teal' : percent >= 50 ? 'amber' : 'rose')
 const goodWhenLow = (percent) => (percent <= 10 ? 'teal' : percent <= 25 ? 'amber' : 'rose')
 
-const Section = ({ title, hint, children }) => (
-  <Box>
+const Section = ({ title, hint, children, anchor = false }) => (
+  <Box
+    ref={
+      anchor
+        ? (node) => node?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        : undefined
+    }
+  >
     <Stack direction="row" spacing={1} sx={{ alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
       <Typography variant="subtitle2" component="h3">
         {title}
@@ -93,8 +99,34 @@ const EntityRow = ({ tone, title, subtitle, open, completed, rework, percent, on
   )
 }
 
-const PersonRow = ({ member, showTeam }) => (
-  <Stack direction="row" spacing={1.25} sx={{ alignItems: 'center', py: 0.875, borderBottom: `1px solid ${colors.border}`, '&:last-of-type': { borderBottom: 0 } }}>
+const PersonRow = ({ member, showTeam, onPick }) => (
+  <Stack
+    direction="row"
+    spacing={1.25}
+    {...(onPick
+      ? {
+          component: 'button',
+          type: 'button',
+          onClick: () => onPick(member),
+          'aria-label': `See ${member.fullName}'s tasks`,
+        }
+      : {})}
+    sx={{
+      alignItems: 'center',
+      width: '100%',
+      px: onPick ? 0.75 : 0,
+      py: 0.875,
+      border: 0,
+      borderBottom: `1px solid ${colors.border}`,
+      borderRadius: onPick ? 1.5 : 0,
+      bgcolor: 'transparent',
+      font: 'inherit',
+      textAlign: 'left',
+      cursor: onPick ? 'pointer' : 'default',
+      '&:last-of-type': { borderBottom: 0 },
+      '&:hover': onPick ? { bgcolor: colors.page } : undefined,
+    }}
+  >
     <UserAvatar name={member.fullName} size={30} />
     <Box sx={{ flex: 1, minWidth: 0 }}>
       <Stack direction="row" spacing={0.75} sx={{ alignItems: 'center', minWidth: 0 }}>
@@ -137,7 +169,7 @@ const Loading = () => (
  * teams listed inside it drill down in place, so an admin can walk
  * workspace → group → team without leaving the board.
  */
-export const ScopeDetailsDrawer = ({ workspaceId, scope, onClose, onOpenBoard }) => {
+export const ScopeDetailsDrawer = ({ workspaceId, scope, onClose, onOpenBoard, onPickPerson, focus }) => {
   const { isEnabled } = useFeatures()
   const [cursor, setCursor] = useState({ groupId: scope.groupId ?? '', teamId: scope.teamId ?? '' })
   const [trail, setTrail] = useState([])
@@ -330,13 +362,22 @@ export const ScopeDetailsDrawer = ({ workspaceId, scope, onClose, onOpenBoard })
                 </Section>
               ) : null}
 
-              <Section title="People" hint={`${data.members.length} ${data.members.length === 1 ? 'person' : 'people'}`}>
+              <Section
+                title="People"
+                hint={`${data.members.length} ${data.members.length === 1 ? 'person' : 'people'}`}
+                anchor={focus === 'people'}
+              >
                 {data.members.length === 0 ? (
                   <Typography variant="caption">Nobody has been added yet.</Typography>
                 ) : (
                   <Box>
                     {data.members.map((member) => (
-                      <PersonRow key={member.id} member={member} showTeam={data.scope !== 'team'} />
+                      <PersonRow
+                        key={member.id}
+                        member={member}
+                        showTeam={data.scope !== 'team'}
+                        onPick={onPickPerson}
+                      />
                     ))}
                   </Box>
                 )}

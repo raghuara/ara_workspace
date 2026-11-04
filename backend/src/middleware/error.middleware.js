@@ -24,11 +24,30 @@ const errorHandler = (error, req, res, next) => {
 
   console.error(error);
 
+  if (error.code === "ER_BAD_FIELD_ERROR") {
+    const column = /Unknown column '([^']+)'/.exec(error.sqlMessage || "")?.[1] ?? "one it needs";
+    return res.status(500).json({
+      message: `The database is missing the column "${column}". Run the pending migrations, then try again.`,
+      code: "MIGRATION_PENDING"
+    });
+  }
+
   if (error.code === "ER_NO_SUCH_TABLE") {
     const table = /Table '[^.']*\.?([^.']+)' doesn't exist/.exec(error.sqlMessage || "")?.[1] ?? "one it needs";
     return res.status(500).json({
       message: `The database is missing the table "${table}". Run the pending migrations, then try again.`,
       code: "MIGRATION_PENDING"
+    });
+  }
+
+  // On a developer machine the real reason goes back to the browser, so a
+  // failure is readable without digging through the server console. Never off
+  // localhost: the message carries table and column names.
+  const isLocal = /^(localhost|127\.0\.0\.1|\[?::1\]?)$/.test(req.hostname || "");
+  if (isLocal) {
+    return res.status(500).json({
+      message: `Unexpected server error: ${error.sqlMessage || error.message}`,
+      code: error.code || "INTERNAL"
     });
   }
 

@@ -2,6 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const express = require("express");
 const cors = require("cors");
+const compression = require("compression");
 const helmet = require("helmet");
 const rateLimit = require("express-rate-limit");
 const authRoutes = require("./routes/auth.routes");
@@ -38,7 +39,8 @@ const isAllowedOrigin = (origin) => !origin || allowedOrigins.includes(origin) |
 
 app.use(
   cors({
-    origin: (origin, callback) => callback(null, isAllowedOrigin(origin))
+    origin: (origin, callback) => callback(null, isAllowedOrigin(origin)),
+    exposedHeaders: ["X-Session-Token"]
   })
 );
 
@@ -49,6 +51,7 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" }
   })
 );
+app.use(compression({ threshold: 1024 }));
 app.use(express.json({ limit: "1mb" }));
 
 const loginLimiter = rateLimit({

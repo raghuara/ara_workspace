@@ -32,7 +32,9 @@ const mapEntry = (row) => ({
   summary: row.summary,
   detail: parseJson(row.detail, null),
   at: row.at,
-  taskTitle: row.task_title ?? "Deleted task",
+  taskTitle: row.task_title ?? "A task with no name kept",
+  taskDeleted: Boolean(row.task_deleted),
+  workspaceName: row.workspace_name ?? "",
   clientName: row.client_name ?? "—",
   clientTone: row.client_tone ?? "slate"
 });

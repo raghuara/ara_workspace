@@ -13,7 +13,20 @@ import {
 import { PeriodContext } from './periodContext'
 
 const YEARS_BACK = 4
-const NOTHING_PICKED = { year: null, month: null }
+const NOTHING_PICKED = { year: null, month: null, day: null, custom: null }
+
+const isoOf = (date) => date.toISOString().slice(0, 10)
+
+const addDays = (iso, delta) => {
+  const date = new Date(`${iso}T12:00:00`)
+  date.setDate(date.getDate() + delta)
+  return isoOf(date)
+}
+
+const dayLabel = (iso) => {
+  const date = new Date(`${iso}T12:00:00`)
+  return `${date.getDate()} ${MONTH_NAMES[date.getMonth()].slice(0, 3)} ${date.getFullYear()}`
+}
 
 export const PeriodProvider = ({ children }) => {
   const { activeWorkspace, activeWorkspaceId } = useWorkspace()
@@ -60,6 +73,31 @@ export const PeriodProvider = ({ children }) => {
 
     const remember = (pick) => setPicks((current) => ({ ...current, [activeWorkspaceId]: pick }))
 
+    // A single day sits on top of the month: same provider, narrower range, so
+    // every page that already reads `range` filters to that day untouched.
+    const today = isoOf(new Date())
+    const day = own.day && own.day <= today && own.day >= yearRange.from && own.day <= yearRange.to ? own.day : null
+
+    // A free range (this week, month to date, anything hand-picked) overrides
+    // the month without replacing it, so clearing it falls back to the month.
+    const custom =
+      own.custom && own.custom.from && own.custom.to && own.custom.from <= own.custom.to ? own.custom : null
+
+    const pickDay = (iso) => {
+      if (!iso) return remember({ year, month: own.month, day: null, custom: null })
+      const date = new Date(`${iso}T12:00:00`)
+      return remember({ year: fiscalYearOf(date, startMonth), month: monthKeyOf(date), day: iso, custom: null })
+    }
+
+    const pickRange = (from, to, rangeLabel) =>
+      remember({ year, month: own.month, day: null, custom: { from, to, label: rangeLabel } })
+
+    const stepDay = (delta) => {
+      const target = addDays(day, delta)
+      if (target > today || target < fiscalYearRange(oldestYear, startMonth).from) return null
+      return { year, month: own.month, day: target, label: dayLabel(target) }
+    }
+
     return {
       startMonth,
       startMonthName: MONTH_NAMES[startMonth - 1],
@@ -70,23 +108,37 @@ export const PeriodProvider = ({ children }) => {
       currentYear,
       oldestYear,
       isCurrentYear,
-      isCurrentPeriod: isCurrentYear && selectedMonth?.key === todayKey,
+      isCurrentPeriod: custom ? false : day ? day === today : isCurrentYear && selectedMonth?.key === todayKey,
+      day,
+      today,
+      dayLabel,
+      custom,
+      setDay: pickDay,
+      setRange: pickRange,
+      clearDay: () => remember({ year, month: own.month, day: null, custom: null }),
       years,
       months,
       monthsFor,
       month: selectedMonth ? selectedMonth.key : 'all',
       selectedMonth,
       yearRange,
-      range: selectedMonth ? { from: selectedMonth.from, to: selectedMonth.to } : yearRange,
-      periodLabel: selectedMonth ? selectedMonth.label : `FY ${yearLabel}`,
-      previous: shift(-1),
-      next: shift(1),
-      setYear: (next) => remember({ year: next, month: null }),
-      setMonth: (key) => remember({ year, month: key }),
-      setPeriod: (nextYear, key) => remember({ year: nextYear, month: key }),
-      resetToToday: () => remember({ year: currentYear, month: todayKey }),
+      range: custom
+        ? { from: custom.from, to: custom.to }
+        : day
+          ? { from: day, to: day }
+          : selectedMonth
+            ? { from: selectedMonth.from, to: selectedMonth.to }
+            : yearRange,
+      periodLabel: custom ? custom.label : day ? dayLabel(day) : selectedMonth ? selectedMonth.label : `FY ${yearLabel}`,
+      previous: custom ? null : day ? stepDay(-1) : shift(-1),
+      next: custom ? null : day ? stepDay(1) : shift(1),
+      setYear: (next) => remember({ year: next, month: null, day: null, custom: null }),
+      setMonth: (key) => remember({ year, month: key, day: null, custom: null }),
+      setPeriod: (nextYear, key, nextDay = null) =>
+        remember({ year: nextYear, month: key, day: nextDay, custom: null }),
+      resetToToday: () => remember({ year: currentYear, month: todayKey, day: null, custom: null }),
     }
-  }, [own.year, own.month, currentYear, startMonth, todayKey, activeWorkspaceId])
+  }, [own.year, own.month, own.day, own.custom, currentYear, startMonth, todayKey, activeWorkspaceId])
 
   return <PeriodContext.Provider value={value}>{children}</PeriodContext.Provider>
 }

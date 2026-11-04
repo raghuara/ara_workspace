@@ -11,13 +11,16 @@ const ACTIVITY_SELECT = `
     h.detail,
     DATE_FORMAT(h.at, '%Y-%m-%dT%H:%i:%s') AS at,
     CONCAT(e.first_name, ' ', e.last_name) AS actor_name,
-    t.title AS task_title,
+    COALESCE(t.title, h.task_title) AS task_title,
+    (t.id IS NULL) AS task_deleted,
     c.name AS client_name,
-    c.tone AS client_tone
+    c.tone AS client_tone,
+    w.name AS workspace_name
   FROM task_history h
   LEFT JOIN employees e ON e.employee_id = h.actor_id
   LEFT JOIN tasks t ON t.id = h.task_id
   LEFT JOIN clients c ON c.id = t.client_id
+  LEFT JOIN workspaces w ON w.id = h.workspace_id
 `;
 
 const buildFilters = ({ workspaceIds, workspaceId, search, action, actorId, from, to }) => {
@@ -49,7 +52,9 @@ const buildFilters = ({ workspaceIds, workspaceId, search, action, actorId, from
   }
   if (search) {
     const term = `%${search}%`;
-    clauses.push("(t.title LIKE ? OR CONCAT(e.first_name, ' ', e.last_name) LIKE ? OR h.summary LIKE ?)");
+    clauses.push(
+      "(COALESCE(t.title, h.task_title) LIKE ? OR CONCAT(e.first_name, ' ', e.last_name) LIKE ? OR h.summary LIKE ?)"
+    );
     params.push(term, term, term);
   }
 

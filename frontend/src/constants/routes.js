@@ -17,6 +17,7 @@ export const ROUTES = {
   employeeImport: '/employees/import',
   employeeDetail: '/employees/:employeeId',
   activity: '/activity',
+  dailyTracker: '/daily-tracker',
   performance: '/performance',
 
   adminSetup: '/admin/setup',
@@ -58,5 +59,7 @@ export const withFilters = (path, filters = {}) => {
   return text ? `${path}?${text}` : path
 }
 
-export const filteredViewPath = (scope = {}, view = DEFAULT_VIEW, filters = {}) =>
+export const dailyTrackerPath = (filters = {}) => withFilters(ROUTES.dailyTracker, filters)
+
+export const filteredViewPath =(scope = {}, view = DEFAULT_VIEW, filters = {}) =>
   withFilters(viewPathFor(scope, view), filters)

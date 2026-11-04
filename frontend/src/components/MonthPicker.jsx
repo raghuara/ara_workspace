@@ -39,6 +39,13 @@ const sectionLabelSx = {
   color: colors.textSecondary,
 }
 
+/** Monday of the week the given day falls in. */
+const startOfWeek = (iso) => {
+  const date = new Date(`${iso}T12:00:00`)
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7))
+  return date.toISOString().slice(0, 10)
+}
+
 const StepButton = ({ target, direction, onGo, sx }) => {
   const Icon = direction < 0 ? ChevronLeft : ChevronRight
   const button = (
@@ -161,6 +168,7 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
     selectedMonth,
     startMonth,
     currentYear,
+    todayKey,
     oldestYear,
     monthsFor,
     isCurrentPeriod,
@@ -168,6 +176,14 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
     next,
     setPeriod,
     resetToToday,
+    day,
+    today,
+    dayLabel,
+    setDay,
+    clearDay,
+    yearRange,
+    custom,
+    setRange,
   } = usePeriod()
   const [anchor, setAnchor] = useState(null)
   const [viewYear, setViewYear] = useState(year)
@@ -186,8 +202,46 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
   const viewMonths = monthsFor(viewYear)
   const sections = groupByCalendarYear(viewMonths)
   const showingViewYear = viewYear === year
-  const entireSelected = showingViewYear && month === 'all'
-  const label = selectedMonth ? selectedMonth.label : `FY ${yearLabel}`
+  const entireSelected = showingViewYear && month === 'all' && !day && !custom
+  const label = custom ? custom.label : day ? dayLabel(day) : selectedMonth ? selectedMonth.label : `FY ${yearLabel}`
+
+  const chooseDay = (iso) => {
+    setDay(iso)
+    close()
+  }
+
+  const presets = [
+    { key: 'today', label: 'Today', active: day === today, apply: () => setDay(today) },
+    {
+      key: 'week',
+      label: 'This week',
+      active: custom?.label === 'This week',
+      apply: () => setRange(startOfWeek(today), today, 'This week'),
+    },
+    {
+      key: 'mtd',
+      label: 'Month to date',
+      active: custom?.label === 'Month to date',
+      apply: () => setRange(`${today.slice(0, 7)}-01`, today, 'Month to date'),
+    },
+    {
+      key: 'month',
+      label: 'This month',
+      active: !day && !custom && selectedMonth?.key === todayKey,
+      apply: () => resetToToday(),
+    },
+    {
+      key: 'year',
+      label: 'Entire year',
+      active: entireSelected,
+      apply: () => setPeriod(currentYear, 'all'),
+    },
+  ]
+
+  const applyPreset = (preset) => {
+    preset.apply()
+    close()
+  }
 
   return (
     <>
@@ -207,7 +261,7 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
           ...sx,
         }}
       >
-        <StepButton target={previous} direction={-1} onGo={(target) => setPeriod(target.year, target.month)} />
+        <StepButton target={previous} direction={-1} onGo={(target) => setPeriod(target.year, target.month, target.day ?? null)} />
         <Box
           component="button"
           type="button"
@@ -254,7 +308,7 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
             <ChevronDown size={14} strokeWidth={2} aria-hidden="true" />
           </Box>
         </Box>
-        <StepButton target={next} direction={1} onGo={(target) => setPeriod(target.year, target.month)} />
+        <StepButton target={next} direction={1} onGo={(target) => setPeriod(target.year, target.month, target.day ?? null)} />
       </Box>
 
       <Popover
@@ -301,6 +355,32 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
             disabled={viewYear >= currentYear}
             onClick={() => setViewYear((value) => value + 1)}
           />
+        </Box>
+
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, px: 1.5, pb: 1.25 }}>
+          {presets.map((preset) => (
+            <Box
+              key={preset.key}
+              component="button"
+              type="button"
+              onClick={() => applyPreset(preset)}
+              aria-pressed={preset.active}
+              sx={{
+                ...plainButton,
+                height: 28,
+                px: 1.125,
+                borderRadius: 999,
+                border: `1px solid ${preset.active ? colors.brand : colors.border}`,
+                bgcolor: preset.active ? colors.brandSoft : colors.surface,
+                color: preset.active ? colors.brandDark : colors.textSecondary,
+                fontSize: '0.75rem',
+                fontWeight: preset.active ? 700 : 500,
+                '&:hover': { borderColor: colors.brand, color: colors.brandDark },
+              }}
+            >
+              {preset.label}
+            </Box>
+          ))}
         </Box>
 
         <Box sx={{ px: 1.5 }}>
@@ -366,6 +446,90 @@ export const MonthPicker = ({ height = 36, hint, sx }) => {
               </Box>
             </Box>
           ))}
+        </Box>
+
+        <Box sx={{ px: 1.5, pb: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
+            <Typography component="p" sx={sectionLabelSx}>
+              Or one day
+            </Typography>
+            <Box sx={{ flex: 1, height: '1px', bgcolor: colors.border }} />
+          </Box>
+
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Box
+              component="input"
+              type="date"
+              aria-label="Show a single day"
+              value={day ?? ''}
+              min={yearRange.from}
+              max={today < yearRange.to ? today : yearRange.to}
+              onChange={(event) => (event.target.value ? chooseDay(event.target.value) : clearDay())}
+              sx={{
+                flex: 1,
+                minWidth: 0,
+                height: 36,
+                px: 1.25,
+                border: `1px solid ${day ? colors.brand : colors.border}`,
+                borderRadius: 1.5,
+                bgcolor: day ? colors.brandSoft : colors.surface,
+                color: day ? colors.brandDark : colors.textPrimary,
+                font: 'inherit',
+                fontSize: '0.8125rem',
+                fontWeight: day ? 650 : 500,
+                fontVariantNumeric: 'tabular-nums',
+                '&:focus-visible': focusRing,
+              }}
+            />
+
+            <Box
+              component="button"
+              type="button"
+              onClick={() => chooseDay(today)}
+              aria-pressed={day === today}
+              sx={{
+                ...plainButton,
+                flexShrink: 0,
+                height: 36,
+                px: 1.25,
+                borderRadius: 1.5,
+                border: `1px solid ${day === today ? colors.brand : colors.border}`,
+                bgcolor: day === today ? colors.brand : colors.surface,
+                color: day === today ? '#FFFFFF' : colors.textPrimary,
+                fontSize: '0.8125rem',
+                fontWeight: 600,
+                '&:hover': { bgcolor: day === today ? colors.brandDark : colors.brandSoft },
+              }}
+            >
+              Today
+            </Box>
+          </Box>
+
+          {day ? (
+            <Box
+              component="button"
+              type="button"
+              onClick={() => {
+                clearDay()
+                close()
+              }}
+              sx={{
+                ...plainButton,
+                mt: 0.75,
+                gap: 0.5,
+                height: 28,
+                px: 1,
+                borderRadius: 1.5,
+                color: colors.brand,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                '&:hover': { bgcolor: colors.brandSoft, color: colors.brandDark },
+              }}
+            >
+              <RotateCcw size={13} strokeWidth={2.25} aria-hidden="true" />
+              Back to the whole month
+            </Box>
+          ) : null}
         </Box>
 
         <Box

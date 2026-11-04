@@ -12,9 +12,7 @@ const MAX_IMAGE_BYTES = 5 * 1024 * 1024
 const isImage = (attachment) => attachment.mimeType?.startsWith('image/')
 
 /**
- * Reference images and files on a task. Uploads go straight to the real
- * attachments API even though tasks are still mock — the backend only checks
- * the id format for task owners, so the two can be wired up independently.
+ * Reference images and files on a task, stored through the attachments API.
  *
  * Listed URLs are short-lived signed links; the list is re-fetched after every
  * change rather than patched, so a stale link is never shown.

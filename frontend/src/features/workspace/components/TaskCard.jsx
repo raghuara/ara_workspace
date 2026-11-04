@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import {
   Box,
+  ButtonBase,
   Divider,
   IconButton,
   InputBase,
@@ -27,6 +28,7 @@ import {
   TextCursorInput,
   Trash2,
   TriangleAlert,
+  UserPlus,
 } from 'lucide-react'
 import { ConfirmDialog } from '@/components/ConfirmDialog'
 import { ToneChip } from '@/components/ToneChip'
@@ -35,8 +37,10 @@ import { PERMISSIONS } from '@/constants/permissions'
 import { PRIORITY_TONES, STATUS_TONES } from '@/constants/workspaceDomain'
 import { usePermissions } from '@/hooks/usePermissions'
 import { useAccess } from '@/hooks/useAccess'
+import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors } from '@/theme/tokens'
 import { formatRelativeDay } from '@/utils/date'
+import { AssigneePicker } from './AssigneePicker'
 
 const settle = keyframes`
   from { transform: translateY(-6px) scale(0.98); box-shadow: 0 12px 28px rgba(37, 99, 235, 0.24); border-color: ${colors.brand}; }
@@ -71,13 +75,23 @@ const ActionButton = ({ title, icon: Icon, tone, onClick }) => (
   </Tooltip>
 )
 
-export const TaskCard = ({
+const columnsKey = (columns = []) => columns.map((column) => `${column.id}\u0000${column.name}\u0000${column.tone}\u0000${column.kind}`).join('\u0001')
+
+const SHALLOW_PROPS = ['task', 'draggable', 'onOpen', 'onPointerDown', 'onAction', 'isDragging', 'isSettling', 'lifted', 'columnId', 'index']
+
+const sameCard = (prev, next) =>
+  SHALLOW_PROPS.every((key) => prev[key] === next[key]) &&
+  (prev.columns === next.columns || columnsKey(prev.columns) === columnsKey(next.columns))
+
+const TaskCardView = ({
   task,
   draggable = false,
   onOpen,
   onPointerDown,
   onAction,
   columns = [],
+  columnId,
+  index,
   isDragging,
   isSettling,
   lifted,
@@ -90,6 +104,7 @@ export const TaskCard = ({
   const [renaming, setRenaming] = useState(false)
   const [draft, setDraft] = useState(task.title)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [assignAnchor, setAssignAnchor] = useState(null)
 
   const interactive = Boolean(onAction) && !lifted && !isDragging
   const completed = task.statusKind === 'completed'
@@ -102,6 +117,19 @@ export const TaskCard = ({
   const canChangeColumn = canMove && columns.length > 1
   const hasMenu = canUpdate || canCreate || canChangeColumn || canDelete
   const menuOpen = Boolean(menu)
+
+  const { teams, groups, assignableMembers } = useWorkspace()
+  const canAssign = can(PERMISSIONS.TASK_ASSIGN) && editable
+  const actionCount = (canMove && !completed ? 1 : 0) + (canUpdate ? 1 : 0) + (hasMenu ? 1 : 0)
+  const pickable = canAssign && interactive
+  const assignTitle = pickable
+    ? task.assignees.length === 0
+      ? 'Nobody on this yet — click to assign'
+      : `${task.assignees.map((person) => person.fullName).join(', ')} · click to change`
+    : task.assignees.map((person) => person.fullName).join(', ')
+
+  const openAssign = (event) => setAssignAnchor(event.currentTarget)
+  const closeAssign = () => setAssignAnchor(null)
 
   const closeMenu = () => {
     setMenu(null)
@@ -124,7 +152,7 @@ export const TaskCard = ({
       role="button"
       tabIndex={0}
       data-task-id={task.id}
-      onPointerDown={draggable ? (event) => onPointerDown?.(event, task) : undefined}
+      onPointerDown={draggable ? (event) => onPointerDown?.(event, task, columnId, index) : undefined}
       onClick={() => {
         if (!renaming) onOpen?.(task)
       }}
@@ -198,7 +226,12 @@ export const TaskCard = ({
         </Stack>
       ) : null}
 
-      <Stack direction="row" spacing={0.5} sx={{ flexWrap: 'wrap', mb: 0.75, pr: interactive ? 11 : 0 }} useFlexGap>
+      <Stack
+        direction="row"
+        spacing={0.5}
+        sx={{ flexWrap: 'wrap', mb: 0.75, pr: interactive ? actionCount * 3.5 : 0 }}
+        useFlexGap
+      >
         <ToneChip label={task.clientName} tone={task.clientTone} />
         {task.points ? (
           <Tooltip title={`Size ${task.sizeKey} — ${task.points} points`}>
@@ -261,34 +294,81 @@ export const TaskCard = ({
       )}
 
       <Stack direction="row" spacing={1} useFlexGap sx={{ alignItems: 'center', flexWrap: 'wrap' }}>
-        <Stack direction="row" spacing={-0.75} sx={{ mr: 0.25 }}>
-          {task.assignees.slice(0, 3).map((assignee) => (
-            <Tooltip key={assignee.id} title={assignee.fullName}>
-              <Box sx={{ ml: -0.5, '&:first-of-type': { ml: 0 } }}>
-                <UserAvatar name={assignee.fullName} size={22} />
-              </Box>
-            </Tooltip>
-          ))}
-          {task.assignees.length > 3 ? (
-            <Box
-              sx={{
-                ml: -0.5,
-                width: 22,
-                height: 22,
-                borderRadius: '50%',
-                display: 'grid',
-                placeItems: 'center',
-                bgcolor: colors.neutralSoft,
-                border: `1px solid ${colors.border}`,
-                fontSize: '0.625rem',
-                fontWeight: 600,
-                color: colors.textSecondary,
-              }}
-            >
-              +{task.assignees.length - 3}
-            </Box>
-          ) : null}
-        </Stack>
+        <Tooltip title={assignTitle}>
+          <Box
+            component={pickable ? ButtonBase : 'div'}
+            onClick={pickable ? (event) => {
+              event.stopPropagation()
+              openAssign(event)
+            } : undefined}
+            onPointerDown={pickable ? stop : undefined}
+            onKeyDown={pickable ? stop : undefined}
+            aria-label={pickable ? 'Change who is on this task' : undefined}
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              mr: 0.25,
+              p: 0.25,
+              borderRadius: 999,
+              transition: 'background-color 120ms ease',
+              ...(pickable && {
+                cursor: 'pointer',
+                '&:hover': { bgcolor: colors.neutralSoft },
+                '&:focus-visible': { outline: `2px solid ${colors.brand}`, outlineOffset: 1 },
+                ...(assignAnchor && { bgcolor: colors.brandSoft }),
+              }),
+            }}
+          >
+            {task.assignees.length === 0 ? (
+              pickable ? (
+              <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center', color: STATUS_TONES.amber.strong }}>
+                <Box
+                  sx={{
+                    width: 22,
+                    height: 22,
+                    borderRadius: '50%',
+                    display: 'grid',
+                    placeItems: 'center',
+                    border: `1px dashed ${STATUS_TONES.amber.strong}`,
+                  }}
+                >
+                  <UserPlus size={12} strokeWidth={2} aria-hidden="true" />
+                </Box>
+                <Typography variant="caption" sx={{ color: 'inherit', fontWeight: 700 }}>
+                  Needs someone
+                </Typography>
+              </Stack>
+              ) : null
+            ) : (
+              <>
+                {task.assignees.slice(0, 3).map((assignee) => (
+                  <Box key={assignee.id} sx={{ ml: -0.5, '&:first-of-type': { ml: 0 } }}>
+                    <UserAvatar name={assignee.fullName} size={22} />
+                  </Box>
+                ))}
+                {task.assignees.length > 3 ? (
+                  <Box
+                    sx={{
+                      ml: -0.5,
+                      width: 22,
+                      height: 22,
+                      borderRadius: '50%',
+                      display: 'grid',
+                      placeItems: 'center',
+                      bgcolor: colors.neutralSoft,
+                      border: `1px solid ${colors.border}`,
+                      fontSize: '0.625rem',
+                      fontWeight: 600,
+                      color: colors.textSecondary,
+                    }}
+                  >
+                    +{task.assignees.length - 3}
+                  </Box>
+                ) : null}
+              </>
+            )}
+          </Box>
+        </Tooltip>
 
         <Stack
           direction="row"
@@ -435,6 +515,18 @@ export const TaskCard = ({
                 ]}
           </Menu>
 
+          {assignAnchor ? (
+            <AssigneePicker
+              anchorEl={assignAnchor}
+              team={teams.find((item) => item.id === task.teamId)}
+              group={groups.find((item) => item.id === task.groupId)}
+              members={assignableMembers}
+              value={task.assigneeIds ?? []}
+              onClose={closeAssign}
+              onSave={(assigneeIds, assignees) => onAction('assign', task, { assigneeIds, assignees })}
+            />
+          ) : null}
+
           <ConfirmDialog
             open={confirmDelete}
             title="Delete this task?"
@@ -451,3 +543,5 @@ export const TaskCard = ({
     </Box>
   )
 }
+
+export const TaskCard = memo(TaskCardView, sameCard)

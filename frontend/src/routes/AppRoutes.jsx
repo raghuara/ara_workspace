@@ -10,9 +10,11 @@ import { ROUTES, workspaceViewPath } from '@/constants/routes'
 import { RequirePermission } from './RequirePermission'
 import { RequireFeature } from './RequireFeature'
 import { RequireAuth } from './RequireAuth'
+import { registerPage } from './pagePreload'
 
-const lazyPage = (loader, exportName) =>
-  lazy(() =>
+const lazyPage = (loader, exportName) => {
+  registerPage(loader)
+  return lazy(() =>
     loader().then((module) => {
       const component = module[exportName]
       if (typeof component !== 'function') {
@@ -24,6 +26,7 @@ const lazyPage = (loader, exportName) =>
       return { default: component }
     }),
   )
+}
 
 const LoginPage = lazyPage(() => import('@/features/auth/LoginPage'), 'LoginPage')
 const DashboardPage = lazyPage(() => import('@/features/dashboard/DashboardPage'), 'DashboardPage')
@@ -32,6 +35,7 @@ const WorkloadPage = lazyPage(() => import('@/features/workspace/WorkloadPage'),
 const RecurringTasksPage = lazyPage(() => import('@/features/workspace/RecurringTasksPage'), 'RecurringTasksPage')
 const ClientsPage = lazyPage(() => import('@/features/clients/ClientsPage'), 'ClientsPage')
 const ClientDeskPage = lazyPage(() => import('@/features/clientdesk/ClientDeskPage'), 'ClientDeskPage')
+const DailyTrackerPage = lazyPage(() => import('@/features/tracker/DailyTrackerPage'), 'DailyTrackerPage')
 const ActivityLogPage = lazyPage(() => import('@/features/activity/ActivityLogPage'), 'ActivityLogPage')
 const UserTypesPage = lazyPage(() => import('@/features/admin/UserTypesPage'), 'UserTypesPage')
 const DepartmentsPage = lazyPage(() => import('@/features/admin/DepartmentsPage'), 'DepartmentsPage')
@@ -154,6 +158,14 @@ export const AppRoutes = () => (
             element={guarded(<ClientDeskPage />, {
               permission: PERMISSIONS.TICKET_VIEW,
               title: 'Client Desk',
+            })}
+          />
+          <Route
+            path={ROUTES.dailyTracker}
+            element={guarded(contained(<DailyTrackerPage />), {
+              permission: PERMISSIONS.WORKSPACE_VIEW,
+              feature: FEATURES.WORKSPACES,
+              title: 'Daily task tracker',
             })}
           />
           <Route

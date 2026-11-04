@@ -11,4 +11,7 @@ router.get("/dashboard/employees", requirePermission("employee.view"), dashboard
 router.get("/dashboard/recent-employees", requirePermission("employee.view"), dashboardController.getRecentEmployees);
 router.get("/workspaces/:workspaceId/summary", requireAnyPermission("workspace.view", "task.view"), dashboardController.getScopeSummary);
 
+router.get("/workspaces/:workspaceId/daily-tracker", requirePermission("workspace.view"), dashboardController.getDailyTracker);
+router.post("/dashboard/daily-tracker/export", requirePermission("workspace.view"), dashboardController.exportDailyTracker);
+
 module.exports = router;

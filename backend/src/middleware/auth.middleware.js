@@ -1,6 +1,9 @@
 const jwt = require("jsonwebtoken");
 const userModel = require("../models/user.model");
 const { effectivePermissions } = require("../services/permissions.service");
+const { signSession, needsRefresh, isRevoked } = require("../utils/token");
+
+const SESSION_HEADER = "X-Session-Token";
 
 // Runs before a protected route. Reads the token from the
 // "Authorization: Bearer <token>" header, verifies it, and attaches the
@@ -18,6 +21,7 @@ const requireAuth = (req, res, next) => {
 
   try {
     req.user = jwt.verify(token, process.env.JWT_SECRET);
+    if (needsRefresh(req.user)) res.setHeader(SESSION_HEADER, signSession(req.user));
     next();
   } catch (error) {
     return res.status(401).json({
@@ -37,6 +41,13 @@ const checkPermissions = (isAllowed) => async (req, res, next) => {
     return res.status(401).json({
       message: "Your session is no longer valid. Please log in again.",
       code: "UNAUTHORIZED"
+    });
+  }
+
+  if (isRevoked(user, req.user)) {
+    return res.status(401).json({
+      message: "Your password changed, so this session ended. Please log in again.",
+      code: "TOKEN_INVALID"
     });
   }
 

@@ -12,12 +12,4 @@ export const sessionService = {
     }
     return apiRequest('/auth/me')
   },
-
-  // Role switching was a mock-only development aid. With real accounts each
-  // login is one role, so the switcher has nothing to list.
-  listRoles: async () => [],
-
-  switchRole: async () => {
-    throw new ApiError(400, 'Sign in with a different account to change role.', 'NOT_SUPPORTED')
-  },
 }

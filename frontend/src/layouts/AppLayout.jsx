@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Box, Drawer } from '@mui/material'
 import { Outlet } from 'react-router-dom'
+import { preloadPages } from '@/routes/pagePreload'
+import { ContentFallback } from './ContentFallback'
 import { Header } from './Header'
 import { Sidebar } from './Sidebar'
+import { TopProgress } from './TopProgress'
 import { WorkspaceProvider } from '@/features/workspace/WorkspaceProvider'
 import { PeriodProvider } from '@/features/workspace/PeriodProvider'
 import { RealtimeSync } from '@/features/workspace/RealtimeSync'
@@ -13,6 +16,10 @@ import { colors, layout } from '@/theme/tokens'
 export const AppLayout = () => {
   const [mobileOpen, setMobileOpen] = useState(false)
   const { mustChangePassword } = useSession()
+
+  useEffect(() => {
+    preloadPages()
+  }, [])
 
   return (
     <WorkspaceProvider>
@@ -42,8 +49,13 @@ export const AppLayout = () => {
 
           <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
             <Header onOpenSidebar={() => setMobileOpen(true)} />
-            <Box component="main" sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-              <Outlet />
+            <Box sx={{ flex: 1, minHeight: 0, position: 'relative', display: 'flex', flexDirection: 'column' }}>
+              <TopProgress />
+              <Box component="main" sx={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
+                <Suspense fallback={<ContentFallback />}>
+                  <Outlet />
+                </Suspense>
+              </Box>
             </Box>
           </Box>
         </Box>

@@ -19,37 +19,72 @@ export const notFound = (message = 'The requested record could not be found.') =
 export const badRequest = (message) => new ApiError(400, message, 'BAD_REQUEST')
 
 // ---------------------------------------------------------------------------
-// Token storage. The backend issues a JWT at login; it lives in localStorage
-// when "remember me" is ticked, otherwise in sessionStorage (cleared on tab
-// close). Every real request sends it as a Bearer header.
+// Token storage. The backend issues a JWT at login. Each tab keeps its own
+// copy in sessionStorage, so a refresh never swaps the account a tab signed
+// in with. "Remember me" also keeps a copy in localStorage, which only seeds
+// tabs that have not signed in yet (a new tab, or the browser reopening).
 // ---------------------------------------------------------------------------
 const TOKEN_KEY = 'ara.token'
 
-export const getToken = () => {
+const attempt = (action, fallback = null) => {
   try {
-    return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY)
+    return action()
   } catch {
-    return null
+    return fallback
   }
+}
+
+const readTabToken = () => attempt(() => sessionStorage.getItem(TOKEN_KEY))
+const readRememberedToken = () => attempt(() => localStorage.getItem(TOKEN_KEY))
+
+const accountOf = (token) =>
+  attempt(() => {
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    return JSON.parse(atob(payload)).userId ?? null
+  })
+
+const sameAccount = (first, second) => {
+  if (!first || !second) return false
+  const account = accountOf(first)
+  return account !== null && account === accountOf(second)
+}
+
+export const getToken = () => {
+  const own = readTabToken()
+  if (own) return own
+
+  const remembered = readRememberedToken()
+  if (remembered) attempt(() => sessionStorage.setItem(TOKEN_KEY, remembered))
+  return remembered
 }
 
 export const storeToken = (token, remember) => {
-  try {
-    clearToken()
-    if (remember) localStorage.setItem(TOKEN_KEY, token)
-    else sessionStorage.setItem(TOKEN_KEY, token)
-  } catch {
-    // Storage blocked — the session simply will not survive a refresh.
+  attempt(() => sessionStorage.setItem(TOKEN_KEY, token))
+  if (remember) {
+    attempt(() => localStorage.setItem(TOKEN_KEY, token))
+  } else if (sameAccount(readRememberedToken(), token)) {
+    attempt(() => localStorage.removeItem(TOKEN_KEY))
   }
 }
 
+/**
+ * The backend hands back a fresh token while someone keeps working, so an
+ * active session never lapses. The tab's copy is replaced, and the remembered
+ * copy too when it belongs to the same account.
+ */
+const SESSION_HEADER = 'X-Session-Token'
+
+const refreshToken = (token) => {
+  if (!token || token === readTabToken()) return
+  attempt(() => sessionStorage.setItem(TOKEN_KEY, token))
+  if (sameAccount(readRememberedToken(), token)) attempt(() => localStorage.setItem(TOKEN_KEY, token))
+}
+
 export const clearToken = () => {
-  try {
-    localStorage.removeItem(TOKEN_KEY)
-    sessionStorage.removeItem(TOKEN_KEY)
-  } catch {
-    // ignore
-  }
+  const own = readTabToken()
+  const remembered = readRememberedToken()
+  attempt(() => sessionStorage.removeItem(TOKEN_KEY))
+  if (remembered && (!own || sameAccount(remembered, own))) attempt(() => localStorage.removeItem(TOKEN_KEY))
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +102,21 @@ export const onSuccessfulWrite = (listener) => {
   return () => writeListeners.delete(listener)
 }
 
+let pendingWrites = 0
+const pendingListeners = new Set()
+
+const trackWrite = (delta) => {
+  pendingWrites += delta
+  pendingListeners.forEach((listener) => listener(pendingWrites))
+}
+
+export const getPendingWrites = () => pendingWrites
+
+export const onPendingWrites = (listener) => {
+  pendingListeners.add(listener)
+  return () => pendingListeners.delete(listener)
+}
+
 export const toQueryString = (params = {}) => {
   const query = new URLSearchParams()
   Object.entries(params).forEach(([key, value]) => {
@@ -78,9 +128,19 @@ export const toQueryString = (params = {}) => {
 
 /**
  * Calls the backend. Non-2xx responses become ApiError so callers can use
- * isUnauthorized / isForbidden / isNotFound exactly as they did with the mock.
+ * isUnauthorized / isForbidden / isNotFound to branch on the failure.
  */
 export const apiRequest = async (path, options = {}) => {
+  if ((options.method ?? 'GET') === 'GET') return send(path, options)
+  trackWrite(1)
+  try {
+    return await send(path, options)
+  } finally {
+    trackWrite(-1)
+  }
+}
+
+const send = async (path, options = {}) => {
   const { method = 'GET', body, isPublic = false } = options
   const headers = { Accept: 'application/json' }
 
@@ -102,6 +162,8 @@ export const apiRequest = async (path, options = {}) => {
   } catch {
     throw new ApiError(0, 'Could not reach the server. Check that the backend is running.', 'NETWORK')
   }
+
+  if (!isPublic) refreshToken(response.headers.get(SESSION_HEADER))
 
   const text = await response.text()
   let payload = null
@@ -130,17 +192,24 @@ export const apiRequest = async (path, options = {}) => {
 
 
 /** Fetches a binary response (an .xlsx, a PDF) with the session token attached. */
-export const apiDownload = async (path) => {
+export const apiDownload = async (path, { method = 'GET', body } = {}) => {
   const headers = {}
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
+  if (body !== undefined) headers['Content-Type'] = 'application/json'
 
   let response
   try {
-    response = await fetch(`${API_BASE_URL}${path}`, { headers })
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    })
   } catch {
     throw new ApiError(0, 'Could not reach the server. Check that the backend is running.', 'NETWORK')
   }
+
+  refreshToken(response.headers.get(SESSION_HEADER))
 
   if (!response.ok) {
     const payload = await response.json().catch(() => null)

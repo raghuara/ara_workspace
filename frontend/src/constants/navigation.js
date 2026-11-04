@@ -1,7 +1,8 @@
-import { Building2, Headset, TrendingUp, History, LayoutDashboard, Settings2, ShieldCheck, Users } from 'lucide-react'
+import { Building2, CalendarCheck, Headset, TrendingUp, History, LayoutDashboard, Settings2, ShieldCheck, Users } from 'lucide-react'
 import { PERMISSIONS } from './permissions'
 import { FEATURES } from './features'
 import { ROUTES } from './routes'
+import { USER_TYPE } from './userTypes'
 
 export const NAVIGATION = [
   {
@@ -11,12 +12,20 @@ export const NAVIGATION = [
     icon: LayoutDashboard,
     end: true,
     permission: PERMISSIONS.DASHBOARD_VIEW,
-    userTypeIds: [3],
+    userTypeIds: [USER_TYPE.EMPLOYEE],
   },
   {
     key: 'organisation',
     label: 'Organisation',
     children: [
+      {
+        key: 'daily-tracker',
+        label: 'Daily Tracker',
+        to: ROUTES.dailyTracker,
+        icon: CalendarCheck,
+        permission: PERMISSIONS.WORKSPACE_VIEW,
+        feature: FEATURES.WORKSPACES,
+      },
       {
         key: 'clients',
         label: 'Clients',

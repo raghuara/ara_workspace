@@ -7,6 +7,7 @@ import {
   Stack,
   TablePagination,
   TextField,
+  Tooltip,
   Typography,
 } from '@mui/material'
 import { History, Zap } from 'lucide-react'
@@ -18,13 +19,15 @@ import { QueryStateView } from '@/components/QueryStateView'
 import { ToneChip } from '@/components/ToneChip'
 import { UserAvatar } from '@/components/UserAvatar'
 import { activityService } from '@/api/activityService'
+import { taskService } from '@/api/taskService'
+import { TaskDetailDrawer } from '@/features/workspace/components/TaskDetailDrawer'
 import { HISTORY_ACTIONS } from '@/constants/workspaceDomain'
 import { useAsync } from '@/hooks/useAsync'
 import { useDebouncedValue } from '@/hooks/useDebouncedValue'
 import { usePeriod } from '@/hooks/usePeriod'
 import { useWorkspace } from '@/hooks/useWorkspace'
 import { colors, layout } from '@/theme/tokens'
-import { formatStamp } from '@/utils/date'
+import { formatDate, formatRelativeDay, formatStamp, formatTime } from '@/utils/date'
 import { pluralize } from '@/utils/format'
 
 const ACTION_TONES = {
@@ -36,6 +39,37 @@ const ACTION_TONES = {
   [HISTORY_ACTIONS.DELETED]: 'rose',
   [HISTORY_ACTIONS.COMMENTED]: 'slate',
 }
+
+const VERBS = {
+  [HISTORY_ACTIONS.CREATED]: 'created',
+  [HISTORY_ACTIONS.MOVED]: 'moved',
+  [HISTORY_ACTIONS.UPDATED]: 'updated',
+  [HISTORY_ACTIONS.ASSIGNED]: 'reassigned',
+  [HISTORY_ACTIONS.COMPLETED]: 'completed',
+  [HISTORY_ACTIONS.DELETED]: 'deleted',
+  [HISTORY_ACTIONS.COMMENTED]: 'commented on',
+}
+
+// Most entries read "moved this task"; those become "moved <name>". Anything
+// more specific ("deleted a comment by Priya") keeps its own wording.
+const GENERIC_SUMMARY = /\bthis task\b|^marked this complete$/i
+
+const phrasing = (entry) =>
+  GENERIC_SUMMARY.test(entry.summary)
+    ? { lead: VERBS[entry.action] ?? 'changed', joiner: '' }
+    : { lead: entry.summary, joiner: ' on' }
+
+const groupByDay = (items) => {
+  const days = new Map()
+  items.forEach((entry) => {
+    const key = (entry.at ?? '').slice(0, 10)
+    if (!days.has(key)) days.set(key, [])
+    days.get(key).push(entry)
+  })
+  return [...days.entries()]
+}
+
+const timeOf = (value) => formatTime((value ?? '').slice(11, 16))
 
 const clip = (value) => {
   const flat = value.replace(/\s+/g, ' ')
@@ -94,6 +128,16 @@ export const ActivityLogPage = () => {
     setPage(0)
   }
 
+  const [focusTask, setFocusTask] = useState(null)
+
+  const openTask = async (entry) => {
+    try {
+      setFocusTask(await taskService.getTask(entry.taskId))
+    } catch {
+      setFocusTask(null)
+    }
+  }
+
   return (
     <Box sx={{ maxWidth: layout.contentMaxWidth, mx: 'auto', px: { xs: 2, md: 3, lg: 4 }, py: { xs: 3, md: 4 } }}>
       <PageHeader
@@ -144,72 +188,125 @@ export const ActivityLogPage = () => {
             <EmptyState icon={History} title="No activity found" description="Nothing matches the current filters." />
           ) : (
             <Box>
-              {data?.items?.map((entry) => (
-                <Stack
-                  key={entry.id}
-                  direction={{ xs: 'column', sm: 'row' }}
-                  spacing={1.5}
-                  sx={{ alignItems: { xs: 'flex-start', sm: 'center' }, px: 2,
-                    py: 1.5,
-                    borderBottom: `1px solid ${colors.border}`,
-                    '&:last-of-type': { borderBottom: 0 },
-                    '&:hover': { bgcolor: colors.page }, }}
-                >
-                  {entry.isAutomation ? (
-                    <Box
-                      aria-hidden="true"
-                      sx={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: '50%',
-                        display: 'grid',
-                        placeItems: 'center',
-                        bgcolor: colors.brandSoft,
-                        color: colors.brand,
-                        flexShrink: 0,
-                      }}
+              {groupByDay(data?.items ?? []).map(([day, entries]) => (
+                <Box key={day}>
+                  <Stack
+                    direction="row"
+                    spacing={1}
+                    sx={{
+                      position: 'sticky',
+                      top: 0,
+                      zIndex: 1,
+                      alignItems: 'center',
+                      px: 2,
+                      py: 0.875,
+                      bgcolor: colors.page,
+                      borderBottom: `1px solid ${colors.border}`,
+                    }}
+                  >
+                    <Typography
+                      sx={{ fontSize: '0.6875rem', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase' }}
                     >
-                      <Zap size={15} strokeWidth={1.75} />
-                    </Box>
-                  ) : (
-                    <UserAvatar name={entry.actorName} size={32} />
-                  )}
+                      {formatRelativeDay(day)}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: colors.textSecondary }}>
+                      {formatDate(day)} · {pluralize(entries.length, 'change')}
+                    </Typography>
+                  </Stack>
 
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Stack
-                      direction="row"
-                      spacing={0.75}
-                      useFlexGap
-                      sx={{ alignItems: 'center', flexWrap: 'wrap' }}
-                    >
-                      <Typography variant="body2" fontWeight={600}>
-                        {entry.actorName}
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {entry.summary}
-                      </Typography>
-                      <ToneChip label={entry.action} tone={ACTION_TONES[entry.action] ?? 'slate'} />
-                    </Stack>
-                    <Stack
-                      direction="row"
-                      spacing={0.75}
-                      useFlexGap
-                      sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 0.5 }}
-                    >
-                      <Typography variant="caption" fontWeight={600}>
-                        {entry.taskTitle}
-                      </Typography>
-                      <ToneChip label={entry.clientName} tone={entry.clientTone} />
-                      {detailText(entry) ? (
-                        <Typography variant="caption">{detailText(entry)}</Typography>
-                      ) : null}
-                    </Stack>
-                  </Box>
+                  {entries.map((entry) => {
+                    const { lead, joiner } = phrasing(entry)
+                    const openable = !entry.taskDeleted && Boolean(entry.taskId)
 
-                  <Typography variant="caption" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
-                    {formatStamp(entry.at)}
-                  </Typography>
-                </Stack>
+                    return (
+                      <Stack
+                        key={entry.id}
+                        direction={{ xs: 'column', sm: 'row' }}
+                        spacing={1.5}
+                        onClick={openable ? () => openTask(entry) : undefined}
+                        sx={{
+                          alignItems: { xs: 'flex-start', sm: 'center' },
+                          px: 2,
+                          py: 1.5,
+                          cursor: openable ? 'pointer' : 'default',
+                          borderBottom: `1px solid ${colors.border}`,
+                          '&:last-of-type': { borderBottom: 0 },
+                          '&:hover': { bgcolor: openable ? colors.page : 'transparent' },
+                        }}
+                      >
+                        {entry.isAutomation ? (
+                          <Box
+                            aria-hidden="true"
+                            sx={{
+                              width: 32,
+                              height: 32,
+                              borderRadius: '50%',
+                              display: 'grid',
+                              placeItems: 'center',
+                              bgcolor: colors.brandSoft,
+                              color: colors.brand,
+                              flexShrink: 0,
+                            }}
+                          >
+                            <Zap size={15} strokeWidth={1.75} />
+                          </Box>
+                        ) : (
+                          <UserAvatar name={entry.actorName} size={32} />
+                        )}
+
+                        <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Typography variant="body2" sx={{ lineHeight: 1.5 }}>
+                            <Box component="span" sx={{ fontWeight: 650 }}>
+                              {entry.actorName}
+                            </Box>{' '}
+                            <Box component="span" sx={{ color: colors.textSecondary }}>
+                              {lead}
+                              {joiner}
+                            </Box>{' '}
+                            <Box
+                              component="span"
+                              sx={{
+                                fontWeight: 650,
+                                color: entry.taskDeleted ? colors.textSecondary : colors.textPrimary,
+                                textDecoration: entry.taskDeleted ? 'line-through' : 'none',
+                              }}
+                            >
+                              {entry.taskTitle}
+                            </Box>
+                          </Typography>
+
+                          <Stack
+                            direction="row"
+                            spacing={0.75}
+                            useFlexGap
+                            sx={{ alignItems: 'center', flexWrap: 'wrap', mt: 0.5 }}
+                          >
+                            <ToneChip label={entry.action} tone={ACTION_TONES[entry.action] ?? 'slate'} />
+                            <ToneChip label={entry.clientName} tone={entry.clientTone} />
+                            {entry.taskDeleted ? (
+                              <Tooltip title="The task was deleted — this entry is kept">
+                                <Box sx={{ display: 'inline-flex' }}>
+                                  <ToneChip label="task deleted" tone="rose" />
+                                </Box>
+                              </Tooltip>
+                            ) : null}
+                            {detailText(entry) ? (
+                              <Typography variant="caption" sx={{ color: colors.textSecondary }}>
+                                {detailText(entry)}
+                              </Typography>
+                            ) : null}
+                          </Stack>
+                        </Box>
+
+                        <Tooltip title={formatStamp(entry.at)}>
+                          <Typography variant="caption" sx={{ flexShrink: 0, whiteSpace: 'nowrap' }}>
+                            {timeOf(entry.at)}
+                          </Typography>
+                        </Tooltip>
+                      </Stack>
+                    )
+                  })}
+                </Box>
               ))}
             </Box>
           )}
@@ -234,6 +331,10 @@ export const ActivityLogPage = () => {
           ) : null}
         </QueryStateView>
       </Card>
+
+      {focusTask ? (
+        <TaskDetailDrawer task={focusTask} onClose={() => setFocusTask(null)} onChanged={reload} />
+      ) : null}
     </Box>
   )
 }

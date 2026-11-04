@@ -105,7 +105,7 @@ export const ClientDeskSummaryCard = ({ workspaceId }) => {
       description={
         data.overdue > 0
           ? `${data.overdue} of ${data.open} open tickets are past their date`
-          : 'Complaints, requirements and changes — each with its own token'
+          : 'Feedback, requirements and changes — each with its own token'
       }
       accent={data.overdue > 0 ? 'rose' : 'blue'}
       padded={false}
@@ -183,7 +183,7 @@ export const ClientDeskSummaryCard = ({ workspaceId }) => {
 
             <Box sx={{ borderTop: `1px solid ${colors.border}` }}>
               {data.pressing.length === 0 ? (
-                <EmptyState icon={Headset} title="Nothing waiting" description="Client requests and complaints show up here." />
+                <EmptyState icon={Headset} title="Nothing waiting" description="Client requests and feedback show up here." />
               ) : (
                 data.pressing.map((ticket) => {
                   const due = dueLabel(ticket)

@@ -104,8 +104,11 @@ const listClientOptions = async (req, res) => {
   const withFollowers = options.map((client) => ({ ...client, assignees: assignees.get(client.id) ?? [] }));
 
   if (req.query.assignedOnly === "true" && workspaceId) {
+    const granted = req.permissions || [];
     const seesAll =
-      (req.permissions || []).includes("ticket.manage.all") || (await access.resolveScopes(req, workspaceId)).admin;
+      granted.includes("ticket.manage.all") ||
+      granted.includes("client.coverage.all") ||
+      (await access.resolveScopes(req, workspaceId)).admin;
     if (!seesAll) {
       const mine = new Set(await ticketModel.findClientIdsForEmployee(workspaceId, req.user.employeeId));
       return res.json(withFollowers.filter((client) => mine.has(client.id)));
